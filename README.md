@@ -7,7 +7,7 @@ nothing stored. Coordination and WebRTC signaling run through the server
 (Postgres + HTTP polling); chat and video are peer-to-peer over WebRTC.
 
 You'll work through **four phases**. They're designed to be realistic, not trick
-questions. We care as much about *how you think* as about what you ship — so a
+questions. We care as much about _how you think_ as about what you ship — so a
 short write-up is required (see **Deliverables**).
 
 > **Using AI is allowed.** Use whatever tools you'd use on the job. The phases are
@@ -43,6 +43,7 @@ one dot to connect, accept, chat, and start video.
 ## Getting started
 
 > ### ⚠️ Repository setup — please read this first
+>
 > **Clone this repository — do _NOT_ fork it.** Then create a brand-new **public**
 > GitHub repository of your own and push your clone there. **Commit as you go** —
 > we review your **git history and commit practice**, so use meaningful,
@@ -88,6 +89,7 @@ different mock geolocation so the dots land apart, then connect.
 (See the email for time expectations.)
 
 ### Phase 1 — Make it run
+
 The app does not currently work end-to-end. There are several bugs in here — find
 and fix each one until two users can reliably see each other on the map, connect,
 chat, and start a video call.
@@ -101,7 +103,8 @@ That's one bug. **There are more** — this is just an example to show the flavo
 Track down and fix each issue you find.
 
 ### Phase 2 — Make it good
-This phase is all about **UI/UX**. Make Pulse genuinely *beautiful* — something
+
+This phase is all about **UI/UX**. Make Pulse genuinely _beautiful_ — something
 you'd be proud to show off and that people would actually want to use. There's no
 mockup and no rules: restyle anything, add motion and polish, rethink the layout,
 tighten the flow, sweat the details. **Use your creativity and make this app
@@ -109,10 +112,12 @@ gorgeous.** We're looking at your sense of design, taste, and product feel — g
 make it stunning.
 
 ### Phase 3 — Make it secure
+
 Review the API before shipping. Identify the issues you'd want fixed before this
 went live, prioritize them, and address what you can.
 
 ### Phase 4 — Make it better
+
 Build something **new** that makes Pulse feel more **alive** and/or **safe** — and
 that genuinely impresses us. Add a unique feature or capability of your own design:
 something creative and original that makes the app stand out and that you'd want a
@@ -162,10 +167,10 @@ Good luck — have fun with it.
 
 ## How it's scored
 
-| Phase | Weight |
-|-------|--------|
-| Phase 1 — Make it run | 15% |
-| Phase 2 — Make it good | 30% |
-| Phase 3 — Make it secure | 20% |
-| Phase 4 — Make it better | 30% |
-| Engineering practice & delivery | 5% |
+| Phase                           | Weight |
+| ------------------------------- | ------ |
+| Phase 1 — Make it run           | 15%    |
+| Phase 2 — Make it good          | 30%    |
+| Phase 3 — Make it secure        | 20%    |
+| Phase 4 — Make it better        | 30%    |
+| Engineering practice & delivery | 5%     |

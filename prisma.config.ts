@@ -1,11 +1,11 @@
-import path from "node:path";
-import { defineConfig, env } from "prisma/config";
+import path from "node:path"
+import { defineConfig, env } from "prisma/config"
 
 // Prisma 7 reads migration/introspection connection details from here (the
 // schema no longer holds a `url`). The Prisma CLI does not auto-load .env, so
 // load it manually (Node 20.12+ ships process.loadEnvFile).
 try {
-  process.loadEnvFile(path.join(process.cwd(), ".env"));
+  process.loadEnvFile(path.join(process.cwd(), ".env"))
 } catch {
   // .env is optional (e.g. on Vercel where vars are injected directly).
 }
@@ -18,4 +18,4 @@ export default defineConfig({
   datasource: {
     url: env("DATABASE_URL"),
   },
-});
+})

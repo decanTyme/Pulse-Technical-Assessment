@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 // Reusable centered prompt for "someone wants to connect" and
 // "someone wants to start video".
@@ -10,12 +10,12 @@ export default function ConnectionPrompt({
   onAccept,
   onDecline,
 }: {
-  title: string;
-  subtitle?: string;
-  acceptLabel: string;
-  declineLabel: string;
-  onAccept: () => void;
-  onDecline: () => void;
+  title: string
+  subtitle?: string
+  acceptLabel: string
+  declineLabel: string
+  onAccept: () => void
+  onDecline: () => void
 }) {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-6">
@@ -38,5 +38,5 @@ export default function ConnectionPrompt({
         </div>
       </div>
     </div>
-  );
+  )
 }

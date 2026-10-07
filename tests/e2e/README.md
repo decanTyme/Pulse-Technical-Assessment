@@ -53,23 +53,23 @@ The busy-peer scenario adds a third isolated participant.
 
 The critical user journeys come from [the business requirements](../../docs/requirements.md):
 
-| Journey | Browser assertions |
-| --- | --- |
-| Enter and explore | Anonymous entry, location errors, live dots, zoom/pan, a broadcast offset of 1–3 km, and a fresh offset/session ID on re-entry. |
-| Request a connection | Consent before chat, decline/retry, ignored-request notification and retry, and rejection of a third participant while connected. |
-| Exchange messages | Actual delivery in both directions, rather than the sender's local echo. |
-| Start and end video | Either participant initiates; the other accepts and ends it; both receive frames/audio and return to working chat. Unaccepted requests do not acquire media; decline and media-denial paths preserve chat. |
-| End and reconnect | Both chat panels close on End, with appropriate remote feedback and a subsequent connection. Closing a connected tab also ends the remaining participant's chat. |
-| Leave and start fresh | Clean departure removes the dot before stale expiry; missed heartbeats remove it while another participant keeps polling; re-entry leaves no old dot. |
+| Journey               | Browser assertions                                                                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enter and explore     | Anonymous entry, location errors, live dots, zoom/pan, a broadcast offset of 1–3 km, and a fresh offset/session ID on re-entry.                                                                            |
+| Request a connection  | Consent before chat, decline/retry, ignored-request notification and retry, and rejection of a third participant while connected.                                                                          |
+| Exchange messages     | Actual delivery in both directions, rather than the sender's local echo.                                                                                                                                   |
+| Start and end video   | Either participant initiates; the other accepts and ends it; both receive frames/audio and return to working chat. Unaccepted requests do not acquire media; decline and media-denial paths preserve chat. |
+| End and reconnect     | Both chat panels close on End, with appropriate remote feedback and a subsequent connection. Closing a connected tab also ends the remaining participant's chat.                                           |
+| Leave and start fresh | Clean departure removes the dot before stale expiry; missed heartbeats remove it while another participant keeps polling; re-entry leaves no old dot.                                                      |
 
 Specs are grouped by user behavior on Pulse's single page:
 
-| Spec | Coverage | Scenarios per browser |
-| --- | --- | --- |
-| [entry.spec.ts](entry.spec.ts) | Entry screen and location-error recovery. | 3 |
-| [presence.spec.ts](presence.spec.ts) | Live dots, departure/expiry, privacy offsets/re-entry, and map gestures. | 4 |
-| [connections.spec.ts](connections.spec.ts) | Consent, decline/timeout/retry, message delivery, busy peers, hang-up/reconnect, and connected-tab closure. | 6 |
-| [video.spec.ts](video.spec.ts) | Either initiator, remote media reception, return to chat, decline, and permission failure on either side. | 5 |
+| Spec                                       | Coverage                                                                                                    | Scenarios per browser |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------- |
+| [entry.spec.ts](entry.spec.ts)             | Entry screen and location-error recovery.                                                                   | 3                     |
+| [presence.spec.ts](presence.spec.ts)       | Live dots, departure/expiry, privacy offsets/re-entry, and map gestures.                                    | 4                     |
+| [connections.spec.ts](connections.spec.ts) | Consent, decline/timeout/retry, message delivery, busy peers, hang-up/reconnect, and connected-tab closure. | 6                     |
+| [video.spec.ts](video.spec.ts)             | Either initiator, remote media reception, return to chat, decline, and permission failure on either side.   | 5                     |
 
 Spec names describe behavior rather than mirroring individual application files.
 The ignored-request case advances only the

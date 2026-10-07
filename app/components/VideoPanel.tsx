@@ -1,30 +1,30 @@
-"use client";
+"use client"
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react"
 
 export default function VideoPanel({
   localStream,
   remoteStream,
   onEnd,
 }: {
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
-  onEnd: () => void;
+  localStream: MediaStream | null
+  remoteStream: MediaStream | null
+  onEnd: () => void
 }) {
-  const localRef = useRef<HTMLVideoElement>(null);
-  const remoteRef = useRef<HTMLVideoElement>(null);
+  const localRef = useRef<HTMLVideoElement>(null)
+  const remoteRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (localRef.current && localRef.current.srcObject !== localStream) {
-      localRef.current.srcObject = localStream;
+      localRef.current.srcObject = localStream
     }
-  }, [localStream]);
+  }, [localStream])
 
   useEffect(() => {
     if (remoteRef.current && remoteRef.current.srcObject !== remoteStream) {
-      remoteRef.current.srcObject = remoteStream;
+      remoteRef.current.srcObject = remoteStream
     }
-  }, [remoteStream]);
+  }, [remoteStream])
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-black">
@@ -59,5 +59,5 @@ export default function VideoPanel({
         </button>
       </div>
     </div>
-  );
+  )
 }

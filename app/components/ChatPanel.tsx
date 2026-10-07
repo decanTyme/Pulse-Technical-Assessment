@@ -1,11 +1,11 @@
-"use client";
+"use client"
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react"
 
 export interface ChatMessage {
-  id: number;
-  mine: boolean;
-  text: string;
+  id: number
+  mine: boolean
+  text: string
 }
 
 export default function ChatPanel({
@@ -16,26 +16,26 @@ export default function ChatPanel({
   onStartVideo,
   onEnd,
 }: {
-  messages: ChatMessage[];
-  connected: boolean;
-  videoBusy: boolean;
-  onSend: (text: string) => void;
-  onStartVideo: () => void;
-  onEnd: () => void;
+  messages: ChatMessage[]
+  connected: boolean
+  videoBusy: boolean
+  onSend: (text: string) => void
+  onStartVideo: () => void
+  onEnd: () => void
 }) {
-  const [draft, setDraft] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState("")
+  const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    endRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || !connected) return;
-    onSend(text);
-    setDraft("");
+    e.preventDefault()
+    const text = draft.trim()
+    if (!text || !connected) return
+    onSend(text)
+    setDraft("")
   }
 
   return (
@@ -89,7 +89,10 @@ export default function ChatPanel({
         <div ref={endRef} />
       </div>
 
-      <form onSubmit={submit} className="flex gap-2 border-t border-zinc-800 p-3">
+      <form
+        onSubmit={submit}
+        className="flex gap-2 border-t border-zinc-800 p-3"
+      >
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -106,5 +109,5 @@ export default function ChatPanel({
         </button>
       </form>
     </div>
-  );
+  )
 }

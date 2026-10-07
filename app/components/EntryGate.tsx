@@ -1,36 +1,36 @@
-"use client";
+"use client"
 
-import { useState } from "react";
+import { useState } from "react"
 
 export default function EntryGate({
   onReady,
 }: {
-  onReady: (lat: number, lng: number) => void;
+  onReady: (lat: number, lng: number) => void
 }) {
-  const [status, setStatus] = useState<"idle" | "locating" | "error">("idle");
-  const [error, setError] = useState<string>("");
+  const [status, setStatus] = useState<"idle" | "locating" | "error">("idle")
+  const [error, setError] = useState<string>("")
 
   function enter() {
     if (!("geolocation" in navigator)) {
-      setStatus("error");
-      setError("Your browser doesn't support location access.");
-      return;
+      setStatus("error")
+      setError("Your browser doesn't support location access.")
+      return
     }
-    setStatus("locating");
+    setStatus("locating")
     navigator.geolocation.getCurrentPosition(
       (pos) => onReady(pos.coords.latitude, pos.coords.longitude),
       (err) => {
-        setStatus("error");
+        setStatus("error")
         setError(
           err.code === err.PERMISSION_DENIED
             ? "Location permission is required to place you on the map."
             : "Couldn't get your location. Please try again.",
-        );
+        )
       },
       // High accuracy + maximumAge:0 forces a fresh fix (Wi-Fi/GPS scan)
       // instead of reusing the browser's cached IP-based location.
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
-    );
+    )
   }
 
   return (
@@ -59,5 +59,5 @@ export default function EntryGate({
         Nothing is stored — closing the tab ends everything.
       </p>
     </div>
-  );
+  )
 }
