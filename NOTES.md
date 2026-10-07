@@ -25,10 +25,11 @@
 ### Functional fixes
 
 - Polling now refreshes only the caller's heartbeat. Previously, one active participant kept abandoned dots alive by refreshing every session.
+- Accept/end coordination updates both busy flags and writes its signal in one transaction. End removes older signals between the pair; decline preserves an unrelated active reservation.
 
 ### Focused regression testing
 
-- Added `npm run test:unit` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. The **heartbeat regression passes**. Tests execute the polling handler with an in-memory database boundary and verify caller-only heartbeats and stale expiry. These checks do not prove real database transactions, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
+- Added `npm run test:unit` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **5 checks pass**. Tests execute polling and signaling handlers with an in-memory database boundary, including reservation rollback and cleanup. These checks do not prove real database transactions, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
 
 ### Automated browser testing
 

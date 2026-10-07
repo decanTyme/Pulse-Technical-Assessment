@@ -14,7 +14,7 @@ The source helper still uses the existing TypeScript compiler to transform
 application TS/TSX and supplies controlled dependency fakes in a VM. Native
 Node type stripping does not process JSX or resolve Next.js path aliases.
 
-Tests execute the polling handler with an in-memory database boundary and verify caller-only heartbeats and stale expiry.
+Tests execute polling and signaling handlers with an in-memory database boundary, including reservation rollback and cleanup.
 
 Small fakes replace database/network/browser boundaries. These checks do not
 prove real Prisma/Postgres transactions, native browser ICE, React scheduling,

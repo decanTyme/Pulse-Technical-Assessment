@@ -18,8 +18,8 @@ const VALID_TYPES: SignalType[] = [
 const MAX_PAYLOAD = 64 * 1024 // SDP/ICE are small; cap to be safe.
 
 // POST /api/signal — body { fromId, toId, type, payload? }
-// Drops one message into the recipient's mailbox. Also manages the `busy`
-// flag so a user can only be in one connection at a time.
+// Drops one message into the recipient's mailbox. Tracks `busy` flags used
+// to auto-decline additional requests during an active conversation.
 export async function POST(request: NextRequest) {
   let body: unknown
   try {
@@ -50,44 +50,55 @@ export async function POST(request: NextRequest) {
   const signalType = type as SignalType
   const payloadStr = typeof payload === "string" ? payload : null
 
-  // Enforce "one active connection at a time": if the target is already busy,
-  // auto-decline the request instead of delivering it.
-  if (signalType === "request") {
-    const target = await prisma.presence.findUnique({
-      where: { id: toId },
-      select: { busy: true },
-    })
-    if (!target) {
-      // Target went offline — tell the initiator it was declined.
-      await sendDecline(toId, fromId)
-      return Response.json({ ok: true, autoDeclined: true })
+  const data = { fromId, toId, type: signalType, payload: payloadStr }
+  try {
+    if (signalType === "request") {
+      const target = await prisma.presence.findUnique({
+        where: { id: toId },
+        select: { busy: true },
+      })
+
+      if (!target || target.busy) {
+        await sendDecline(toId, fromId)
+        return Response.json({ ok: true, autoDeclined: true })
+      }
     }
-    if (target.busy) {
-      await sendDecline(toId, fromId)
-      return Response.json({ ok: true, autoDeclined: true })
+
+    if (signalType === "accept" || signalType === "end") {
+      // A failed mailbox write must also roll back the busy transition.
+      await prisma.$transaction(async (tx) => {
+        if (signalType === "end") {
+          // Remove obsolete negotiation messages before the next attempt.
+          await tx.signal.deleteMany({
+            where: {
+              OR: [
+                { fromId, toId },
+                { fromId: toId, toId: fromId },
+              ],
+            },
+          })
+        }
+
+        await tx.presence.updateMany({
+          where: { id: { in: [fromId, toId] } },
+          data: { busy: signalType === "accept" },
+        })
+
+        await tx.signal.create({ data })
+      })
+    } else {
+      // Pending requests do not reserve peers. Declining one must not clear
+      // the reservation of an unrelated, already active conversation.
+      await prisma.signal.create({ data })
     }
+
+    return Response.json({ ok: true })
+  } catch {
+    // Do not expose database details or SDP/ICE payloads in the response.
+    console.error("Signal coordination failed.")
+
+    return Response.json({ error: "coordination unavailable" }, { status: 503 })
   }
-
-  // Busy transitions:
-  // - accept: the connection is now active → mark BOTH peers busy.
-  // - decline/end: free both peers.
-  if (signalType === "accept") {
-    await prisma.presence.updateMany({
-      where: { id: { in: [fromId, toId] } },
-      data: { busy: true },
-    })
-  } else if (signalType === "decline") {
-    await prisma.presence.updateMany({
-      where: { id: { in: [fromId, toId] } },
-      data: { busy: false },
-    })
-  }
-
-  await prisma.signal.create({
-    data: { fromId, toId, type: signalType, payload: payloadStr },
-  })
-
-  return Response.json({ ok: true })
 }
 
 // Helper: deliver an auto-decline from `target` back to `initiator`.
