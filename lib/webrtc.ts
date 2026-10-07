@@ -57,7 +57,7 @@ export class PeerSession {
     }
 
     this.pc.onconnectionstatechange = () => {
-      this.cb.onConnectionState(this.pc.connectionState)
+      if (!this.closed) this.cb.onConnectionState(this.pc.connectionState)
     }
 
     if (initiator) {
@@ -72,7 +72,15 @@ export class PeerSession {
   }
 
   private wireDataChannel(dc: RTCDataChannel) {
-    dc.onopen = () => this.cb.onChannelOpen()
+    dc.onopen = () => {
+      if (!this.closed) this.cb.onChannelOpen()
+    }
+
+    dc.onclose = () => {
+      // Remote channel closure can precede any peer-connection state change.
+      if (!this.closed) this.cb.onConnectionState("closed")
+    }
+
     dc.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data as string)

@@ -63,9 +63,15 @@ export default function Home() {
   }
 
   function teardown(message?: string) {
-    if (requestTimer.current) clearTimeout(requestTimer.current)
-    peerRef.current?.close()
+    if (requestTimer.current) {
+      clearTimeout(requestTimer.current)
+    }
+    requestTimer.current = null
+
+    const peer = peerRef.current
     peerRef.current = null
+    peer?.close()
+
     setLocalStream(null)
     setRemoteStream(null)
     setVideo("none")
@@ -77,20 +83,26 @@ export default function Home() {
   function startPeer(peerId: string, initiator: boolean) {
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
-        void sendSignal(sessionId, peerId, type, payload)
+        if (peerRef.current === ps) {
+          void sendSignal(sessionId, peerId, type, payload)
+        }
       },
       onChat: (text) => addMessage(false, text),
       onControl: (ctrl) => handleControl(ctrl),
       onRemoteStream: (stream) => setRemoteStream(stream),
       onConnectionState: (state) => {
+        if (peerRef.current !== ps) return
         if (state === "failed") {
-          teardown("Connection failed (network).")
+          disconnect("Connection failed (network).")
+        } else if (state === "closed") {
+          disconnect("Stranger disconnected.")
         }
       },
       onChannelOpen: () => {
-        setConn({ kind: "connected", peerId })
+        if (peerRef.current === ps) setConn({ kind: "connected", peerId })
       },
     })
+
     peerRef.current = ps
   }
 
@@ -165,12 +177,22 @@ export default function Home() {
     setConn({ kind: "idle" })
   }
 
-  function endConnection() {
+  function disconnect(message?: string) {
     const c = connRef.current
     if (c.kind === "connecting" || c.kind === "connected") {
-      void sendSignal(sessionId, c.peerId, "end")
+      // The leave endpoint removes the departed peer; end releases our reservation.
+      void sendSignal(sessionId, c.peerId, "end").catch(() => {
+        if (connRef.current.kind === "idle") {
+          showNotice("Couldn't finish disconnecting. Please try again.")
+        }
+      })
     }
-    teardown()
+
+    teardown(message)
+  }
+
+  function endConnection() {
+    disconnect()
   }
 
   function startVideoRequest() {
@@ -267,24 +289,45 @@ export default function Home() {
   }
 
   const processSignalRef = useRef(processSignal)
+  const disconnectRef = useRef(disconnect)
   useEffect(() => {
     processSignalRef.current = processSignal
+    disconnectRef.current = disconnect
   })
 
   useEffect(() => {
     if (phase !== "live" || !sessionId) return
+
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const tick = async () => {
       try {
         const data = await poll(sessionId)
+
         if (!active) return
+
         setPeers(data.peers)
-        for (const s of data.signals) processSignalRef.current(s)
+
+        const current = connRef.current
+        const hasPeerDisconnected =
+          (current.kind === "connecting" || current.kind === "connected") &&
+          !data.peers.some((peer) => peer.id === current.peerId)
+
+        if (hasPeerDisconnected) {
+          disconnectRef.current("Stranger disconnected.")
+        }
+
+        for (const s of data.signals) {
+          processSignalRef.current(s)
+        }
       } catch {}
-      if (active) timer = setTimeout(tick, POLL_INTERVAL_MS)
+
+      if (active) {
+        timer = setTimeout(tick, POLL_INTERVAL_MS)
+      }
     }
+
     tick()
 
     return () => {

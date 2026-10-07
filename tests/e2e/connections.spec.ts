@@ -124,4 +124,23 @@ test("closing a connected tab ends the other participant's chat and removes its 
     pair.alice.getByTitle("Tap to connect", { exact: true }),
   ).toHaveCount(0, { timeout: 8_000 })
   await expect(pair.alice.getByText("0 online", { exact: true })).toBeVisible()
+
+  // The surviving participant must also be available for a new connection.
+  const newcomer = await pair.addParticipant()
+  await enterParticipant(newcomer)
+  await expect(
+    newcomer.getByTitle("Tap to connect", { exact: true }),
+  ).toHaveCount(1)
+  await newcomer.getByTitle("Tap to connect", { exact: true }).click()
+  await expect(
+    pair.alice.getByRole("heading", { name: "A stranger wants to connect" }),
+  ).toBeVisible()
+  await pair.alice.getByRole("button", { name: "Accept", exact: true }).click()
+  await expect(newcomer.getByRole("textbox")).toBeEnabled({ timeout: 30_000 })
+  await expect(pair.alice.getByRole("textbox")).toBeEnabled({ timeout: 30_000 })
+  await sendAndReceive(
+    newcomer,
+    pair.alice,
+    "A new conversation after departure",
+  )
 })

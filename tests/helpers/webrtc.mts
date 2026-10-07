@@ -9,6 +9,8 @@ type DataChannelEvent = { channel: Channel }
 class Channel {
   readyState: RTCDataChannelState = "open"
   sent: string[] = []
+  onopen?: () => void
+  onclose?: () => void
   declare onmessage: (event: ChannelMessage) => void
 
   send(data: string) {
@@ -17,6 +19,7 @@ class Channel {
 
   close() {
     this.readyState = "closed"
+    this.onclose?.()
   }
 }
 

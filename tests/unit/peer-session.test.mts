@@ -130,3 +130,50 @@ test("a rejected signal remains observable and does not block later signals", as
   assert.equal(rtc.connections[0].remoteDescription?.sdp, offer.sdp)
   assert.equal(rtc.connections[0].localDescription?.type, "answer")
 })
+
+test("remote data-channel closure reports that the session ended", () => {
+  const rtc = createRtcHarness()
+  const states: RTCPeerConnectionState[] = []
+
+  new rtc.PeerSession(
+    true,
+    rtc.createCallbacks({ onConnectionState: (state) => states.push(state) }),
+  )
+
+  rtc.connections[0].channel!.close()
+
+  assert.deepEqual(states, ["closed"])
+})
+
+test("local teardown does not report a remote disconnection", () => {
+  const rtc = createRtcHarness()
+  const states: RTCPeerConnectionState[] = []
+
+  const session = new rtc.PeerSession(
+    true,
+    rtc.createCallbacks({ onConnectionState: (state) => states.push(state) }),
+  )
+
+  session.close()
+
+  assert.deepEqual(states, [])
+})
+
+test("a delayed channel-open event cannot reopen a closed session", () => {
+  const rtc = createRtcHarness()
+  let opened = 0
+
+  const session = new rtc.PeerSession(
+    true,
+    rtc.createCallbacks({
+      onChannelOpen() {
+        opened++
+      },
+    }),
+  )
+
+  session.close()
+  rtc.connections[0].channel!.onopen?.()
+
+  assert.equal(opened, 0)
+})
