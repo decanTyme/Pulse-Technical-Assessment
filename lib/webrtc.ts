@@ -18,13 +18,16 @@ const ICE_CONFIG: RTCConfiguration = {
 export class PeerSession {
   private pc: RTCPeerConnection
   private dc: RTCDataChannel | null = null
+
   private readonly polite: boolean
-  private makingOffer = false
-  private ignoreOffer = false
   private localStream: MediaStream | null = null
   private closed = false
   private readonly cb: PeerCallbacks
   private pendingCandidates: RTCIceCandidateInit[] = []
+  private incomingSignals: Promise<void> = Promise.resolve()
+
+  private makingOffer = false
+  private ignoreOffer = false
 
   constructor(initiator: boolean, cb: PeerCallbacks) {
     this.cb = cb
@@ -82,8 +85,21 @@ export class PeerSession {
     }
   }
 
-  async handleSignal(type: DescType, payload: string) {
+  handleSignal(type: DescType, payload: string): Promise<void> {
+    // A poll can deliver several signals before an async description is ready.
+    const operation = this.incomingSignals.then(() =>
+      this.applySignal(type, payload),
+    )
+
+    // Preserve this operation's rejection for its caller without blocking later signals.
+    this.incomingSignals = operation.catch(() => {})
+
+    return operation
+  }
+
+  private async applySignal(type: DescType, payload: string) {
     if (this.closed) return
+
     const data = JSON.parse(payload)
 
     if (type === "ice") {
@@ -91,9 +107,11 @@ export class PeerSession {
         this.pendingCandidates.push(data)
         return
       }
+
       try {
         await this.pc.addIceCandidate(data)
       } catch {}
+
       return
     }
 
@@ -101,14 +119,19 @@ export class PeerSession {
     const offerCollision =
       desc.type === "offer" &&
       (this.makingOffer || this.pc.signalingState !== "stable")
+
     this.ignoreOffer = !this.polite && offerCollision
     if (this.ignoreOffer) return
 
-    await this.flushPendingCandidates()
     await this.pc.setRemoteDescription(desc)
+    if (this.closed) return
+
+    await this.flushPendingCandidates()
+    if (this.closed) return
+
     if (desc.type === "offer") {
       await this.pc.setLocalDescription()
-      if (this.pc.localDescription) {
+      if (!this.closed && this.pc.localDescription) {
         this.cb.onSignal("answer", JSON.stringify(this.pc.localDescription))
       }
     }
@@ -119,6 +142,8 @@ export class PeerSession {
     const queued = this.pendingCandidates
     this.pendingCandidates = []
     for (const candidate of queued) {
+      if (this.closed) return
+
       try {
         await this.pc.addIceCandidate(candidate)
       } catch {}
@@ -171,8 +196,11 @@ export class PeerSession {
 
   close() {
     if (this.closed) return
+
     this.closed = true
+    this.pendingCandidates = []
     this.stopVideo()
+
     if (this.dc) {
       try {
         this.dc.close()

@@ -20,12 +20,19 @@ class Channel {
   }
 }
 
-// Only the peer/channel behavior needed for chat tests is simulated here.
+// Simulate channel delivery and description/candidate ordering, not native ICE.
 export function createRtcHarness() {
   const connections: Connection[] = []
 
   class Connection {
     channel?: Channel
+    remoteDescription: RTCSessionDescriptionInit | null = null
+    localDescription: RTCSessionDescriptionInit | null = null
+    signalingState: RTCSignalingState = "stable"
+    candidates: RTCIceCandidateInit[] = []
+    operations: string[] = []
+    closed = false
+
     declare ondatachannel: (event: DataChannelEvent) => void
 
     constructor() {
@@ -36,7 +43,47 @@ export function createRtcHarness() {
       return (this.channel = new Channel())
     }
 
-    close() {}
+    async setRemoteDescription(description: RTCSessionDescriptionInit) {
+      this.operations.push("remote-description-start")
+
+      // Model the browser API's asynchronous description installation.
+      await Promise.resolve()
+
+      if (this.closed) {
+        throw new Error("Connection closed")
+      }
+
+      this.remoteDescription = description
+      this.signalingState =
+        description.type === "offer" ? "have-remote-offer" : "stable"
+
+      this.operations.push("remote-description-end")
+    }
+
+    async setLocalDescription() {
+      if (this.closed) {
+        throw new Error("Connection closed")
+      }
+
+      const type = this.remoteDescription?.type === "offer" ? "answer" : "offer"
+      this.localDescription = { type, sdp: "test-description" }
+      this.signalingState = type === "answer" ? "stable" : "have-local-offer"
+    }
+
+    async addIceCandidate(candidate: RTCIceCandidateInit) {
+      this.operations.push("ice")
+
+      if (this.closed || !this.remoteDescription) {
+        throw new Error("Candidate requires an open connection and description")
+      }
+
+      this.candidates.push(candidate)
+    }
+
+    close() {
+      this.closed = true
+      this.signalingState = "closed"
+    }
   }
 
   const { PeerSession } = loadSource<PeerSessionModule>(
