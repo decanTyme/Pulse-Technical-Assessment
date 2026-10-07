@@ -16,7 +16,17 @@
 - API routes initially failed with `Cannot find module '.prisma/client/default'`, and TypeScript reported that `@prisma/client` had no `PrismaClient` export. Prisma 7 no longer generates the client automatically during `db push`; explicit generation resolved the missing-client blocker. The existing production build script already includes generation. [Prisma CLI reference](https://www.prisma.io/docs/orm/v7/reference/prisma-cli-reference#db-push)
 - After client generation, the globe loads and responds to interaction, and polling appears to run locally. The development log shows `GET /` returning HTTP 200.
 - Local development observations with the Singapore database: app entry completes in under one second and `/api/signal` requests complete in under 100 ms. No controlled benchmark has been run.
-- Baseline lint passed. TypeScript passed after generating Prisma Client. A production build and the complete two-participant chat/video flow still need verification; local startup does not complete Phase 1.
+- Lint, TypeScript, and the production build pass. The complete two-participant chat/video flow still needs verification; local startup does not complete Phase 1.
+
+### Development tooling
+
+- Configured Prettier with two-space indentation and no semicolons for consistent formatting.
+
+### Automated browser testing
+
+- Configured Playwright 1.63.0 with Chromium/Firefox projects and a managed production server at `http://localhost:3000`. Stop the development server before running browser checks.
+- The runner reads the isolated test database's `DATABASE_URL` only from ignored `.env.test.local`; Zod 4 validates the URL, and a guard rejects the known development database.
+- Firefox's test launch temporarily disables its content sandbox on Windows to work around a page-creation hang in the restricted runner. Remove this workaround for normal test environments. Setup and artifact handling are documented in [the test README](tests/e2e/README.md).
 
 ### Database and deployment decisions
 
