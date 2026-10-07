@@ -1,10 +1,30 @@
 import type { NextRequest } from "next/server"
+import { z } from "zod"
 import { prisma } from "@/lib/prisma"
-import { applyPrivacyOffset, isValidLatLng } from "@/lib/geo"
+import { applyPrivacyOffset } from "@/lib/geo"
 import { readJsonBody } from "@/lib/request"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+const JoinBodySchema = z.object(
+  {
+    id: z.string({ error: "invalid id" }).refine(
+      // Match the existing UTF-16 length rule, including non-BMP characters.
+      (id) => id.length >= 8 && id.length <= 64,
+      { error: "invalid id" },
+    ),
+    lat: z
+      .number({ error: "invalid coordinates" })
+      .min(-90, { error: "invalid coordinates" })
+      .max(90, { error: "invalid coordinates" }),
+    lng: z
+      .number({ error: "invalid coordinates" })
+      .min(-180, { error: "invalid coordinates" })
+      .max(180, { error: "invalid coordinates" }),
+  },
+  { error: "invalid body" },
+)
 
 // POST /api/join — body { id, lat, lng } (raw coords).
 // Applies a 1–3 km privacy offset and upserts the presence row. Raw
@@ -15,16 +35,16 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "invalid body" }, { status: 400 })
   }
 
-  const { id, lat, lng } = (body.data ?? {}) as Record<string, unknown>
-
-  if (typeof id !== "string" || id.length < 8 || id.length > 64) {
-    return Response.json({ error: "invalid id" }, { status: 400 })
+  const result = JoinBodySchema.safeParse(body.data)
+  if (!result.success) {
+    return Response.json(
+      { error: result.error.issues[0].message },
+      { status: 400 },
+    )
   }
-  if (!isValidLatLng(lat, lng)) {
-    return Response.json({ error: "invalid coordinates" }, { status: 400 })
-  }
 
-  const offset = applyPrivacyOffset(lat as number, lng as number)
+  const { id, lat, lng } = result.data
+  const offset = applyPrivacyOffset(lat, lng)
 
   await prisma.presence.upsert({
     where: { id },

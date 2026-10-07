@@ -32,16 +32,3 @@ function wrapLng(lng: number): number {
   // Keep longitude in [-180, 180].
   return ((((lng + 180) % 360) + 360) % 360) - 180
 }
-
-export function isValidLatLng(lat: unknown, lng: unknown): boolean {
-  return (
-    typeof lat === "number" &&
-    typeof lng === "number" &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-  )
-}
