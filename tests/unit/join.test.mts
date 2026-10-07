@@ -5,24 +5,25 @@ import type { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { loadSource } from "../helpers/source.mts"
 
-const { readJsonBody } =
-  loadSource<typeof import("../../lib/request.ts")>("lib/request.ts")
+type RequestModule = typeof import("../../lib/request.ts")
+type JoinRouteModule = typeof import("../../app/api/join/route.ts")
+type ApplyPrivacyOffsetFunction =
+  typeof import("../../lib/geo.ts").applyPrivacyOffset
+
+const { readJsonBody } = loadSource<RequestModule>("lib/request.ts")
 
 const loadJoinHandler = (
   prisma: unknown,
-  applyPrivacyOffset: typeof import("../../lib/geo.ts").applyPrivacyOffset = () => {
+  applyPrivacyOffset: ApplyPrivacyOffsetFunction = () => {
     throw new Error("Invalid requests must not reach the privacy offset")
   },
 ) =>
-  loadSource<typeof import("../../app/api/join/route.ts")>(
-    "app/api/join/route.ts",
-    {
-      "@/lib/prisma": { prisma },
-      "@/lib/geo": { applyPrivacyOffset },
-      "@/lib/request": { readJsonBody },
-      zod: { z },
-    },
-  ).POST
+  loadSource<JoinRouteModule>("app/api/join/route.ts", {
+    "@/lib/prisma": { prisma },
+    "@/lib/geo": { applyPrivacyOffset },
+    "@/lib/request": { readJsonBody },
+    zod: { z },
+  }).POST
 
 test("malformed join JSON returns a fixed 400 before offset or database access", async () => {
   const POST = loadJoinHandler({})
@@ -39,6 +40,7 @@ test("malformed join JSON returns a fixed 400 before offset or database access",
 
 test("invalid join IDs and coordinates are rejected before offset or database access", async () => {
   const POST = loadJoinHandler({})
+
   const valid = { id: "synthetic-session", lat: 14.5, lng: 120.25 }
   const cases: { body: unknown; error: string }[] = [
     { body: null, error: "invalid body" },

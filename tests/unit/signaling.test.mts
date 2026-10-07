@@ -7,8 +7,10 @@ import { z } from "zod"
 import { loadSource } from "../helpers/source.mts"
 import { database } from "../helpers/database.mts"
 
-const { readJsonBody } =
-  loadSource<typeof import("../../lib/request.ts")>("lib/request.ts")
+type RequestModule = typeof import("../../lib/request.ts")
+type SignalRouteModule = typeof import("../../app/api/signal/route.ts")
+
+const { readJsonBody } = loadSource<RequestModule>("lib/request.ts")
 
 const signalRequest = (type: SignalType, fromId = "alice", toId = "bob") =>
   ({
@@ -16,14 +18,11 @@ const signalRequest = (type: SignalType, fromId = "alice", toId = "bob") =>
   }) as NextRequest
 
 const loadSignalHandler = (prisma: unknown) =>
-  loadSource<typeof import("../../app/api/signal/route.ts")>(
-    "app/api/signal/route.ts",
-    {
-      "@/lib/prisma": { prisma },
-      "@/lib/request": { readJsonBody },
-      zod: { z },
-    },
-  ).POST
+  loadSource<SignalRouteModule>("app/api/signal/route.ts", {
+    "@/lib/prisma": { prisma },
+    "@/lib/request": { readJsonBody },
+    zod: { z },
+  }).POST
 
 test("failed acceptance rolls back busy flags and a later acceptance succeeds", async () => {
   const db = database()

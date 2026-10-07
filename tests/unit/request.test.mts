@@ -2,8 +2,9 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { loadSource } from "../helpers/source.mts"
 
-const { readJsonBody } =
-  loadSource<typeof import("../../lib/request.ts")>("lib/request.ts")
+type RequestModule = typeof import("../../lib/request.ts")
+
+const { readJsonBody } = loadSource<RequestModule>("lib/request.ts")
 
 test("JSON body reading preserves parsed values, including valid null", async () => {
   for (const data of [{ id: "synthetic" }, null]) {
