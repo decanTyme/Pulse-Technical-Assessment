@@ -9,6 +9,7 @@
     "lint": "eslint",
     "format:checkonly": "prettier -c .",
     "format": "prettier -uw .",
+    "test:unit": "node --test tests/unit/*.test.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
