@@ -1,56 +1,62 @@
 import type { NextRequest } from "next/server"
+import { z } from "zod"
 import { prisma } from "@/lib/prisma"
+import { readJsonBody } from "@/lib/request"
 import type { SignalType } from "@/lib/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const VALID_TYPES: SignalType[] = [
-  "request",
-  "accept",
-  "decline",
-  "offer",
-  "answer",
-  "ice",
-  "end",
-]
+const MAX_PAYLOAD = 64 * 1024 // Serialized payload length in UTF-16 code units.
 
-const MAX_PAYLOAD = 64 * 1024 // SDP/ICE are small; cap to be safe.
+const SignalBodySchema = z.object(
+  {
+    fromId: z.string({ error: "invalid ids" }),
+    toId: z.string({ error: "invalid ids" }),
+    type: z.enum(
+      [
+        "request",
+        "accept",
+        "decline",
+        "offer",
+        "answer",
+        "ice",
+        "end",
+      ] satisfies SignalType[],
+      { error: "invalid type" },
+    ),
+    payload: z
+      .string({ error: "invalid payload" })
+      // Preserve the existing cap; Zod's .max() counts Unicode code points.
+      .refine((value) => value.length <= MAX_PAYLOAD, {
+        error: "invalid payload",
+      })
+      .nullish()
+      .transform((value) => value ?? null),
+  },
+  { error: "invalid body" },
+)
 
 // POST /api/signal — body { fromId, toId, type, payload? }
 // Drops one message into the recipient's mailbox. Tracks `busy` flags used
 // to auto-decline additional requests during an active conversation.
 export async function POST(request: NextRequest) {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
+  const body = await readJsonBody(request)
+  if (!body.success) {
     return Response.json({ error: "invalid body" }, { status: 400 })
   }
 
-  const { fromId, toId, type, payload } = (body ?? {}) as Record<
-    string,
-    unknown
-  >
-
-  if (typeof fromId !== "string" || typeof toId !== "string") {
-    return Response.json({ error: "invalid ids" }, { status: 400 })
-  }
-  if (typeof type !== "string" || !VALID_TYPES.includes(type as SignalType)) {
-    return Response.json({ error: "invalid type" }, { status: 400 })
-  }
-  if (
-    payload !== undefined &&
-    payload !== null &&
-    (typeof payload !== "string" || payload.length > MAX_PAYLOAD)
-  ) {
-    return Response.json({ error: "invalid payload" }, { status: 400 })
+  const result = SignalBodySchema.safeParse(body.data)
+  if (!result.success) {
+    // Schema messages are fixed strings; never return submitted SDP/ICE data.
+    return Response.json(
+      { error: result.error.issues[0].message },
+      { status: 400 },
+    )
   }
 
-  const signalType = type as SignalType
-  const payloadStr = typeof payload === "string" ? payload : null
-
-  const data = { fromId, toId, type: signalType, payload: payloadStr }
+  const data = result.data
+  const { fromId, toId, type: signalType } = data
   try {
     if (signalType === "request") {
       const target = await prisma.presence.findUnique({

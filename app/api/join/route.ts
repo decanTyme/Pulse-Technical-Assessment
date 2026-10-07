@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { applyPrivacyOffset, isValidLatLng } from "@/lib/geo"
+import { readJsonBody } from "@/lib/request"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,14 +10,12 @@ export const dynamic = "force-dynamic"
 // Applies a 1–3 km privacy offset and upserts the presence row. Raw
 // coordinates are never stored.
 export async function POST(request: NextRequest) {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
+  const body = await readJsonBody(request)
+  if (!body.success) {
     return Response.json({ error: "invalid body" }, { status: 400 })
   }
 
-  const { id, lat, lng } = (body ?? {}) as Record<string, unknown>
+  const { id, lat, lng } = (body.data ?? {}) as Record<string, unknown>
 
   if (typeof id !== "string" || id.length < 8 || id.length > 64) {
     return Response.json({ error: "invalid id" }, { status: 400 })

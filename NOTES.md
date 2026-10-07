@@ -26,10 +26,11 @@
 
 - Polling now refreshes only the caller's heartbeat. Previously, one active participant kept abandoned dots alive by refreshing every session.
 - Accept/end coordination updates both busy flags and writes its signal in one transaction. End removes older signals between the pair; decline preserves an unrelated active reservation.
+- Signal request validation uses Zod 4's `SignalBodySchema` for typed IDs, signal kinds, and optional payloads. Fixed HTTP 400 errors keep submitted content out of responses. The existing 65,536 UTF-16-unit payload limit and null normalization are preserved. Join and signal share a small JSON-reading helper; each route owns its validation and responses.
 
 ### Focused regression testing
 
-- Added `npm run test:unit` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **5 checks pass**. Tests execute polling and signaling handlers with an in-memory database boundary, including reservation rollback and cleanup. These checks do not prove real database transactions, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
+- Added `npm run test:unit` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **11 checks pass**. Tests execute polling and signaling handlers with an in-memory database boundary, including request validation, reservation rollback, and cleanup. JSON-reading checks use native Requests, and signal validation uses the real Zod schemas. These checks do not prove real database transactions, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
 
 ### Automated browser testing
 
