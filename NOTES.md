@@ -1,5 +1,9 @@
 # Assessment notes
 
+## Delivery priorities
+
+I set deployment readiness as the first milestone: reliable core journeys, prioritized API security fixes, and production/deployment verification. I sequenced visual redesign and additional features after that baseline to concentrate the available time on functionality and safe release.
+
 ## Phase 1: Make it run
 
 ### Local setup
