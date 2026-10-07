@@ -126,7 +126,7 @@ export class PeerSession {
   }
 
   sendChat(text: string) {
-    this.safeSend({ t: "msg", text })
+    return this.safeSend({ t: "chat", text })
   }
 
   sendControl(ctrl: PeerControl) {
@@ -134,9 +134,12 @@ export class PeerSession {
   }
 
   private safeSend(obj: unknown) {
-    if (this.dc && this.dc.readyState === "open") {
+    if (!this.closed && this.dc?.readyState === "open") {
       this.dc.send(JSON.stringify(obj))
+      return true
     }
+
+    return false
   }
 
   async startVideo(): Promise<MediaStream> {

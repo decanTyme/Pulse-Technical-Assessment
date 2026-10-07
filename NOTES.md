@@ -24,13 +24,14 @@
 
 ### Functional fixes
 
+- Chat sender and receiver now use the same message discriminator, and the UI adds a local message only when the open data channel accepts the send.
 - Polling now refreshes only the caller's heartbeat. Previously, one active participant kept abandoned dots alive by refreshing every session.
 - Accept/end coordination updates both busy flags and writes its signal in one transaction. End removes older signals between the pair; decline preserves an unrelated active reservation.
 - Join and signal request validation use Zod 4's `JoinBodySchema` and `SignalBodySchema`, removing manual request casts. Join preserves the 8–64 UTF-16-unit ID limit and requires finite numeric coordinates within latitude ±90 and longitude ±180. Signal preserves its 65,536 UTF-16-unit payload limit and null normalization. Fixed HTTP 400 errors keep submitted content out of responses. Both routes share a small JSON-reading helper and own their validation and responses.
 
 ### Focused regression testing
 
-- Added `npm run test:unit` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **14 checks pass**. Tests execute join, polling, and signaling handlers with controlled database boundaries, including request validation, reservation rollback, and cleanup. JSON-reading checks use native Requests; join and signal validation use real Zod. Join tests replace the privacy-offset calculation to verify that only returned offset coordinates enter the database write. These checks do not prove real database transactions, offset geometry, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
+- Added `npm test` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **16 checks pass**. Tests execute join, polling, and signaling handlers with controlled database boundaries, including request validation, reservation rollback, and cleanup. JSON-reading checks use native Requests; join and signal validation use real Zod. Join tests replace the privacy-offset calculation to verify that only returned offset coordinates enter the database write. Peer-session checks verify chat message compatibility and send readiness with fake data channels. These checks do not prove real database transactions, offset geometry, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
 
 ### Automated browser testing
 

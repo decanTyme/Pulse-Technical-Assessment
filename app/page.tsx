@@ -359,8 +359,10 @@ export default function Home() {
           connected={conn.kind === "connected"}
           videoBusy={video !== "none"}
           onSend={(text) => {
-            peerRef.current?.sendChat(text)
-            addMessage(true, text)
+            if (peerRef.current?.sendChat(text)) addMessage(true, text)
+            else {
+              showNotice("Message wasn't sent. The connection is unavailable.")
+            }
           }}
           onStartVideo={startVideoRequest}
           onEnd={endConnection}
