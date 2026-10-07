@@ -24,9 +24,12 @@
 
 ### Automated browser testing
 
-- Configured Playwright 1.63.0 with Chromium/Firefox projects and a managed production server at `http://localhost:3000`. Stop the development server before running browser checks.
-- The runner reads the isolated test database's `DATABASE_URL` only from ignored `.env.test.local`; Zod 4 validates the URL, and a guard rejects the known development database.
-- Firefox's test launch temporarily disables its content sandbox on Windows to work around a page-creation hang in the restricted runner. Remove this workaround for normal test environments. Setup and artifact handling are documented in [the test README](tests/e2e/README.md).
+- Added Playwright 1.63.0 with one configuration and Chromium/Firefox projects. `npm run test:e2e` runs 18 scenarios per browser (36 checks) against a production build, grouped into entry, presence/map, connections/chat, and video specs. It reads the isolated test database's `DATABASE_URL` only from ignored `.env.test.local`; Zod 4 validates the URL, and a guard rejects the known development database.
+- All six entry checks pass locally. Firefox's test launch temporarily disables its content sandbox on Windows to work around a page-creation hang in the restricted runner. This assessment workaround weakens browser isolation and should be removed for normal test environments; see [test setup and limitations](tests/e2e/README.md).
+- The full browser baseline, recorded before regrouping the unchanged scenarios, produced **16 passes and 20 failures** across all 36 checks. Eighteen failures stopped at the connection-readiness prerequisite, leaving their later assertions unverified; two reproduced stale-dot persistence. Phase 1 remains incomplete. Failures stay active as regression checks, and per-session cleanup left the test database empty.
+- Derived six critical user journeys from [the business requirements](docs/requirements.md): enter/explore, request consent, exchange messages, video, end/reconnect, and leave/start fresh. Added checks for ignored requests, a third participant requesting a busy peer, new session IDs/privacy offsets, map gestures, video decline, media-permission failures, and closing a connected tab. Video scenarios exercise either initiator and the other participant ending the call. See [coverage and boundaries](tests/e2e/README.md).
+- The two-participant scenarios use real API routes, Prisma/PostgreSQL, and WebRTC, with synthetic locations and media devices. Entry errors are injected to verify the UI response. Mapbox's SDK uses a local blank style, so real tiles/token validity, native permission dialogs, hardware permissions, cross-network connectivity, and deployment remain separate checks.
+- Tests build production code in the normal `.next` directory and start a fresh server at `http://localhost:3000`; stop the development server before running them. One worker, explicit per-session cleanup, no automatic retries, and ignored artifacts keep failures reproducible. See [test setup and debugging](tests/e2e/README.md).
 
 ### Database and deployment decisions
 
