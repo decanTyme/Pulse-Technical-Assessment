@@ -24,6 +24,7 @@
 
 ### Functional fixes
 
+- Set 5-second `pg` connection-acquisition and query-response limits for short coordination operations. Made Prisma's existing interactive transaction limits explicit: 2 seconds to acquire a transaction and 5 seconds to run it. These are per-operation limits; a route with several queries can take longer. The query-response limit bounds client waiting and does not guarantee cancellation of SQL already running. [node-postgres configuration](https://node-postgres.com/apis/client), [Prisma 7 transaction options](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions#interactive-transactions)
 - Chat sender and receiver now use the same message discriminator, and the UI adds a local message only when the open data channel accepts the send.
 - Polling now refreshes only the caller's heartbeat. Previously, one active participant kept abandoned dots alive by refreshing every session.
 - Accept/end coordination updates both busy flags and writes its signal in one transaction. End removes older signals between the pair; decline preserves an unrelated active reservation.
@@ -32,6 +33,8 @@
 ### Focused regression testing
 
 - Added `npm test` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TS/TSX for the harness. All **16 checks pass**. Tests execute join, polling, and signaling handlers with controlled database boundaries, including request validation, reservation rollback, and cleanup. JSON-reading checks use native Requests; join and signal validation use real Zod. Join tests replace the privacy-offset calculation to verify that only returned offset coordinates enter the database write. Peer-session checks verify chat message compatibility and send readiness with fake data channels. These checks do not prove real database transactions, offset geometry, native ICE, React scheduling, or media transport. See [test scope](tests/unit/README.md).
+
+- Separate local probes using the real Prisma/pg client timed out after approximately 5 seconds when a TCP peer withheld the connection handshake or query response. These probes used a local simulated peer, with no Neon connection; live database outage and cold-start behavior remain unverified.
 
 ### Automated browser testing
 

@@ -16,9 +16,19 @@ function createClient() {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set")
   }
-  const adapter = new PrismaPg({ connectionString })
+
+  // Bound individual connection and query-response waits for coordination calls.
+  // Routes with several operations can take longer than either limit.
+  const adapter = new PrismaPg({
+    connectionString,
+    connectionTimeoutMillis: 5_000,
+    query_timeout: 5_000,
+  })
+
   return new PrismaClient({
     adapter,
+    // Keep Prisma's existing interactive transaction limits explicit.
+    transactionOptions: { maxWait: 2_000, timeout: 5_000 },
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   })
 }
