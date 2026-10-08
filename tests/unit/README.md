@@ -18,6 +18,9 @@ Tests execute join, polling, and signaling handlers with controlled database bou
 
 Peer-session tests relay a sent message into another session's real receive handler and verify that unavailable or closed channels report a failed send. Incoming signaling checks cover ICE arriving before its offer, an offer and ICE arriving in one batch, skipping queued work after close, and continuing after a rejected signal. Closure checks verify remote channel-close notification, quiet local teardown, and ignoring a delayed channel-open event after closing. The WebRTC helper models asynchronous description installation and channel events, and rejects candidates without a remote description; it does not establish a native peer connection.
 
+API checks use native Responses and controlled fetch/timer boundaries to verify
+HTTP failure handling and the 15-second signaling wait.
+
 Small fakes replace database/network/browser boundaries. These checks do not
 prove real Prisma/Postgres transactions, native browser ICE, React scheduling,
 or media transport. The Playwright suite covers the real API/database/browser journeys.
