@@ -18,6 +18,7 @@ export interface MapLocation {
 export interface PeerDot extends MapLocation {
   id: string
   busy: boolean
+  status: string | null
 }
 
 export interface SignalData {
