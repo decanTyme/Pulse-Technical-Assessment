@@ -159,3 +159,24 @@ test("joining with another dot's ID creates distinct credentials and cannot over
   assert.equal(tokens.size, 2)
   assert.deepEqual(db.state.presence.slice(0, 2), existing)
 })
+
+test("conversation status is optional, bounded, trimmed, and stored only with presence", async () => {
+  const writes: Prisma.PresenceCreateArgs[] = []
+  const POST = loadJoinHandler(
+    { presence: { create: async (args: Prisma.PresenceCreateArgs) => { writes.push(args) } } },
+    () => ({ lat: 12.5, lng: 120.75 }),
+  )
+  const attempt = async (status: unknown) =>
+    POST({ json: async () => ({ lat: 10, lng: 120, status }) } as NextRequest)
+
+  assert.equal((await attempt("  Ask me about cats! 🐈  ")).status, 200)
+  assert.equal(writes.at(-1)?.data.status, "Ask me about cats! 🐈")
+  assert.equal((await attempt("")).status, 200)
+  assert.equal(writes.at(-1)?.data.status, null)
+  assert.equal((await attempt(undefined)).status, 200)
+  assert.equal(writes.at(-1)?.data.status, null)
+  for (const invalid of ["x".repeat(61), 100, { text: "hello" }]) {
+    assert.equal((await attempt(invalid)).status, 400)
+  }
+  assert.equal(writes.length, 3)
+})
