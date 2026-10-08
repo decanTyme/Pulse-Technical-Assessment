@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import "mapbox-gl/dist/mapbox-gl.css"
-import type { Map as MapboxMap, Marker } from "mapbox-gl"
+import type {
+  ExpressionSpecification,
+  Map as MapboxMap,
+  Marker,
+} from "mapbox-gl"
 import type { MapLocation, PeerDot } from "@/lib/types"
 
 interface WorldMapProps {
@@ -11,12 +15,37 @@ interface WorldMapProps {
   me: MapLocation | null
   onPeerClick: (id: string) => void
   interactive: boolean
+  conversationOpen: boolean
   canConnect: boolean
 }
 
 type MapStatus = "loading" | "ready" | "error"
+type MapPaintProperty = Parameters<MapboxMap["setPaintProperty"]>[1]
+type MapPaintValue = Parameters<MapboxMap["setPaintProperty"]>[2]
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ""
+
+const GLOBE_DETAIL_LABELS = [
+  "road-label-simple",
+  "waterway-label",
+  "natural-line-label",
+  "natural-point-label",
+  "water-line-label",
+  "water-point-label",
+  "poi-label",
+  "airport-label",
+  "settlement-subdivision-label",
+  "settlement-minor-label",
+]
+
+function setLayerPaint(
+  map: MapboxMap,
+  layerId: string,
+  property: MapPaintProperty,
+  value: MapPaintValue,
+) {
+  if (map.getLayer(layerId)) map.setPaintProperty(layerId, property, value)
+}
 
 function getMapStyle() {
   const dark = document.documentElement.dataset.theme === "dark"
@@ -29,21 +58,169 @@ function applyMapTheme(map: MapboxMap) {
 
   map.setFog({
     color: readColor("--map-atmosphere"),
-    "high-color": readColor("--map-water"),
+    "high-color":
+      readColor("--map-atmosphere-high") || readColor("--background"),
     "space-color": readColor("--background"),
-    "horizon-blend": 0.08,
+    "horizon-blend": 0.02,
     "star-intensity": 0,
   })
-  if (map.getLayer("background")) {
-    map.setPaintProperty(
-      "background",
-      "background-color",
-      readColor("--map-land"),
+
+  setLayerPaint(map, "land", "background-color", readColor("--map-land"))
+  setLayerPaint(map, "water", "fill-color", readColor("--map-water"))
+  setLayerPaint(map, "waterway", "line-color", readColor("--map-waterway"))
+
+  const landuseColors: ExpressionSpecification = [
+    "match",
+    ["get", "class"],
+    ["wood", "grass", "scrub", "park"],
+    readColor("--map-land-canopy"),
+    ["agriculture", "pitch", "sand"],
+    readColor("--map-land-field"),
+    ["residential", "airport"],
+    readColor("--map-land-built"),
+    readColor("--map-land"),
+  ]
+
+  setLayerPaint(map, "landuse", "fill-color", landuseColors)
+  setLayerPaint(
+    map,
+    "national-park",
+    "fill-color",
+    readColor("--map-land-canopy"),
+  )
+
+  const countryBoundaryOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0.14,
+    1.5,
+    0.2,
+    3,
+    0.48,
+    6,
+    0.78,
+  ]
+
+  const regionBoundaryOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0.015,
+    1.5,
+    0.035,
+    3,
+    0.16,
+    6,
+    0.48,
+  ]
+
+  for (const layerId of [
+    "admin-0-boundary-bg",
+    "admin-0-boundary",
+    "admin-0-boundary-disputed",
+  ]) {
+    setLayerPaint(map, layerId, "line-color", readColor("--map-boundary"))
+    setLayerPaint(map, layerId, "line-opacity", countryBoundaryOpacity)
+  }
+
+  for (const layerId of ["admin-1-boundary-bg", "admin-1-boundary"]) {
+    setLayerPaint(map, layerId, "line-color", readColor("--map-boundary-soft"))
+
+    setLayerPaint(map, layerId, "line-opacity", regionBoundaryOpacity)
+  }
+
+  for (const layer of map.getStyle().layers) {
+    if (layer.type !== "symbol") continue
+    const waterLabel = layer.id.startsWith("water")
+
+    setLayerPaint(
+      map,
+      layer.id,
+      "text-color",
+      readColor(waterLabel ? "--map-water-label" : "--map-label"),
+    )
+
+    setLayerPaint(
+      map,
+      layer.id,
+      "text-halo-color",
+      readColor("--map-label-halo"),
     )
   }
-  if (map.getLayer("water")) {
-    map.setPaintProperty("water", "fill-color", readColor("--map-water"))
+
+  const detailLabelOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0,
+    1.5,
+    0.05,
+    2.5,
+    0.3,
+    4,
+    0.75,
+  ]
+
+  for (const layerId of GLOBE_DETAIL_LABELS) {
+    setLayerPaint(map, layerId, "text-opacity", detailLabelOpacity)
   }
+
+  const majorSettlementLabelOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0.04,
+    1.5,
+    0.16,
+    3,
+    0.72,
+    5,
+    1,
+  ]
+
+  setLayerPaint(
+    map,
+    "settlement-major-label",
+    "text-opacity",
+    majorSettlementLabelOpacity,
+  )
+
+  const stateLabelOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0,
+    2,
+    0.04,
+    3,
+    0.4,
+    4,
+    0.78,
+  ]
+
+  setLayerPaint(map, "state-label", "text-opacity", stateLabelOpacity)
+
+  const countryLabelOpacity: ExpressionSpecification = [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    0,
+    0.18,
+    1.5,
+    0.32,
+    3,
+    0.72,
+    5,
+    1,
+  ]
+
+  setLayerPaint(map, "country-label", "text-opacity", countryLabelOpacity)
 }
 
 export default function WorldMap({
@@ -52,6 +229,7 @@ export default function WorldMap({
   me,
   onPeerClick,
   interactive,
+  conversationOpen,
   canConnect,
 }: WorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -105,10 +283,6 @@ export default function WorldMap({
           attributionControl: true,
         })
         mapRef.current = map
-        map.addControl(
-          new mapboxgl.NavigationControl({ showCompass: false }),
-          "bottom-right",
-        )
         map.on("style.load", () => {
           if (cancelled) return
           applyMapTheme(map)
@@ -136,6 +310,37 @@ export default function WorldMap({
       mapRef.current = null
     }
   }, [reloadKey])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+
+    const desktop = window.matchMedia("(min-width: 48rem)")
+    const updateConversationPadding = () => {
+      const right = conversationOpen && desktop.matches ? 424 : 0
+      const current = map.getPadding()
+      if (
+        current.top === 0 &&
+        current.right === right &&
+        current.bottom === 0 &&
+        current.left === 0
+      ) {
+        return
+      }
+
+      const padding = { top: 0, right, bottom: 0, left: 0 }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        map.jumpTo({ padding })
+      } else {
+        map.easeTo({ padding, duration: 320 })
+      }
+    }
+
+    updateConversationPadding()
+    desktop.addEventListener("change", updateConversationPadding)
+    return () =>
+      desktop.removeEventListener("change", updateConversationPadding)
+  }, [conversationOpen, ready])
 
   // Use the server's offset for both the marker and the camera, never raw fixes.
   useEffect(() => {

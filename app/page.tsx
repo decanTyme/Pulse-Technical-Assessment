@@ -7,6 +7,7 @@ import WorldMap from "./components/WorldMap"
 import ConnectionPrompt from "./components/ConnectionPrompt"
 import ChatPanel, { type ChatMessage } from "./components/ChatPanel"
 import VideoPanel from "./components/VideoPanel"
+import SlidePresence from "./components/SlidePresence"
 import { join, leave, poll, sendSignal } from "@/lib/api"
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc"
 import { POLL_INTERVAL_MS, REQUEST_TIMEOUT_MS } from "@/lib/presence"
@@ -571,6 +572,7 @@ export default function Home() {
         me={myLocation}
         onPeerClick={requestConnection}
         interactive={hasJoined}
+        conversationOpen={inChat}
         canConnect={canDiscover && presenceStatus === "ready"}
       >
         <header
@@ -608,12 +610,14 @@ export default function Home() {
         </header>
       </WorldMap>
 
-      {!hasJoined && <EntryGate onReady={handleReady} />}
+      <SlidePresence present={!hasJoined} className="z-20">
+        <EntryGate onReady={handleReady} />
+      </SlidePresence>
 
-      {canDiscover && (
+      <SlidePresence present={canDiscover} className="z-20">
         <section
           className="
-            pointer-events-none absolute top-24 left-4 z-20 w-[min(300px,calc(100%-2rem))] rounded-panel
+            pointer-events-auto absolute top-24 left-4 z-20 w-[min(300px,calc(100%-2rem))] rounded-panel
             bg-surface p-6 shadow-[0_4px_24px_var(--shadow-warm)] md:left-6
             md:w-[min(300px,calc(100%-3rem))]
           "
@@ -641,7 +645,7 @@ export default function Home() {
                   : "Select an available dot to say hello. A faded dot is already in a conversation."}
           </p>
         </section>
-      )}
+      </SlidePresence>
 
       {notice && (
         <p
@@ -656,10 +660,10 @@ export default function Home() {
         </p>
       )}
 
-      {conn.kind === "requesting" && (
+      <SlidePresence present={conn.kind === "requesting"} className="z-30">
         <section
           className="
-            absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-30
+            pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-30
             w-[min(360px,calc(100%-2rem))] -translate-x-1/2 rounded-panel bg-surface p-6
             shadow-[0_8px_32px_var(--shadow-warm)]
           "
@@ -687,10 +691,15 @@ export default function Home() {
             Cancel
           </button>
         </section>
-      )}
+      </SlidePresence>
 
-      {conn.kind === "incoming" && (
+      <SlidePresence
+        present={conn.kind === "incoming"}
+        variant="dialog"
+        className="z-50"
+      >
         <ConnectionPrompt
+          open={conn.kind === "incoming"}
           title="A stranger wants to connect"
           subtitle="Choose whether you'd like to talk."
           acceptLabel="Accept"
@@ -698,12 +707,12 @@ export default function Home() {
           onAccept={acceptIncoming}
           onDecline={declineIncoming}
         />
-      )}
+      </SlidePresence>
 
-      {inChat && (
+      <SlidePresence present={inChat} variant="conversation" className="z-20">
         <div
           className="
-            absolute inset-x-4 bottom-(--conversation-bottom) z-20 flex h-(--conversation-height) min-h-0
+            pointer-events-auto absolute inset-x-4 bottom-(--conversation-bottom) z-20 flex h-(--conversation-height) min-h-0
             flex-col overflow-hidden rounded-panel bg-surface shadow-[0_8px_32px_var(--shadow-warm)]
             md:top-[max(1.5rem,env(safe-area-inset-top))] md:right-6 md:bottom-6 md:left-auto md:h-auto
             md:w-(--conversation-width)
@@ -740,10 +749,15 @@ export default function Home() {
             onEnd={endConnection}
           />
         </div>
-      )}
+      </SlidePresence>
 
-      {video === "incoming" && (
+      <SlidePresence
+        present={video === "incoming"}
+        variant="dialog"
+        className="z-50"
+      >
         <ConnectionPrompt
+          open={video === "incoming"}
           title="Start video call?"
           subtitle="Accept to share your camera and microphone. You can return to chat."
           acceptLabel="Accept"
@@ -751,7 +765,7 @@ export default function Home() {
           onAccept={acceptVideo}
           onDecline={declineVideo}
         />
-      )}
+      </SlidePresence>
     </main>
   )
 }
