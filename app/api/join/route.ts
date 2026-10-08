@@ -18,6 +18,7 @@ const JoinBodySchema = z.object(
       .number({ error: "invalid coordinates" })
       .min(-180, { error: "invalid coordinates" })
       .max(180, { error: "invalid coordinates" }),
+    status: z.string().trim().max(60).optional(),
   },
   { error: "invalid body" },
 )
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { lat, lng } = result.data
+  const { lat, lng, status } = result.data
   const offset = applyPrivacyOffset(lat, lng)
   const { id, token } = createSessionCredentials()
 
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       lat: offset.lat,
       lng: offset.lng,
       busy: false,
+      status: status || null,
       lastSeen: new Date(),
     },
   })
