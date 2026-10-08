@@ -367,7 +367,8 @@ export default function WorldMap({
             whitespace-nowrap text-primary-foreground">You</span>
         `
         const statusLabel = document.createElement("span")
-        statusLabel.className = "pulse-status pointer-events-none absolute bottom-full left-1/2 mb-1 max-w-48 -translate-x-1/2 truncate rounded-control bg-surface px-2 py-1 text-xs font-medium text-foreground shadow-[0_2px_12px_var(--shadow-warm)]"
+        statusLabel.className =
+          "pulse-status pointer-events-none absolute bottom-full left-1/2 mb-1 max-w-48 -translate-x-1/2 truncate rounded-control bg-surface px-2 py-1 text-xs font-medium text-foreground shadow-[0_2px_12px_var(--shadow-warm)]"
         if (meStatus) {
           statusLabel.textContent = meStatus
           statusLabel.title = meStatus
@@ -379,7 +380,9 @@ export default function WorldMap({
         map.easeTo({ center: [me.lng, me.lat], zoom: 2.6, duration: 600 })
       } else {
         meMarkerRef.current.setLngLat([me.lng, me.lat])
-        const label = meMarkerRef.current.getElement().querySelector<HTMLElement>(".pulse-status")
+        const label = meMarkerRef.current
+          .getElement()
+          .querySelector<HTMLElement>(".pulse-status")
         if (label) {
           label.textContent = meStatus
           label.title = meStatus
@@ -422,7 +425,8 @@ export default function WorldMap({
               group-data-[busy=true]/dot:bg-surface-muted"></span>
           `
           const statusLabel = document.createElement("span")
-          statusLabel.className = "pulse-status pointer-events-none absolute bottom-full left-1/2 mb-1 max-w-48 -translate-x-1/2 truncate rounded-control bg-surface px-2 py-1 text-xs font-medium text-foreground shadow-[0_2px_12px_var(--shadow-warm)]"
+          statusLabel.className =
+            "pulse-status pointer-events-none absolute bottom-full left-1/2 mb-1 max-w-48 -translate-x-1/2 truncate rounded-control bg-surface px-2 py-1 text-xs font-medium text-foreground shadow-[0_2px_12px_var(--shadow-warm)]"
           element.classList.add("relative")
           element.append(statusLabel)
           element.addEventListener("click", (event) => {
@@ -440,13 +444,20 @@ export default function WorldMap({
         element.title = peer.busy ? "In a conversation" : "Tap to connect"
         element.setAttribute("aria-label", element.title)
         element.dataset.busy = String(peer.busy)
-        const label = element.querySelector(".pulse-status") as HTMLElement | null
+        const label = element.querySelector(
+          ".pulse-status",
+        ) as HTMLElement | null
         if (label) {
           label.textContent = peer.status || ""
           label.title = peer.status || ""
           label.hidden = !peer.status
         }
-        element.setAttribute("aria-label", peer.status ? `${element.title}. Status: ${peer.status}` : element.title)
+        element.setAttribute(
+          "aria-label",
+          peer.status
+            ? `${element.title}. Status: ${peer.status}`
+            : element.title,
+        )
         marker.setLngLat([peer.lng, peer.lat])
       }
 

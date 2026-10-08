@@ -163,7 +163,13 @@ test("joining with another dot's ID creates distinct credentials and cannot over
 test("conversation status is optional, bounded, trimmed, and stored only with presence", async () => {
   const writes: Prisma.PresenceCreateArgs[] = []
   const POST = loadJoinHandler(
-    { presence: { create: async (args: Prisma.PresenceCreateArgs) => { writes.push(args) } } },
+    {
+      presence: {
+        create: async (args: Prisma.PresenceCreateArgs) => {
+          writes.push(args)
+        },
+      },
+    },
     () => ({ lat: 12.5, lng: 120.75 }),
   )
   const attempt = async (status: unknown) =>
