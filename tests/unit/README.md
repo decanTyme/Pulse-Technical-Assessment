@@ -27,7 +27,7 @@ types with the existing strict configuration.
 | [presence.test.mts](presence.test.mts)         | Caller-only heartbeat refresh and abandoned-session cleanup.                                                                           |
 | [signaling.test.mts](signaling.test.mts)       | Input validation, recipient consent, premature negotiation rejection, pending expiry, pair/attempt isolation, and transition rollback. |
 | [api.test.mts](api.test.mts)                   | Credential transport, failed-entry recovery, HTTP failures, successful-write completion, and bounded signaling waits.                  |
-| [peer-session.test.mts](peer-session.test.mts) | Chat delivery/send failure, incoming description/ICE ordering, closure, and hangup acknowledgement/timeouts.                           |
+| [peer-session.test.mts](peer-session.test.mts) | Chat delivery, description/ICE ordering, closure/hangup, and pending media cancellation/shared acquisition/retry.                      |
 
 ## Boundaries and limitations
 
@@ -54,6 +54,10 @@ installation and channel events, enforcing the remote-description prerequisite
 for ICE candidates. Tests assert message delivery, candidate processing, and
 closure outcomes. Controlled timers cover signaling and hangup limits without
 real waiting.
+
+Media regressions delay `getUserMedia` at the browser API boundary and check
+track shutdown, absence of attachment after cancellation, and usable replacement
+capture. They do not open physical devices or simulate native permission dialogs.
 
 These checks do not establish real Prisma/PostgreSQL transaction behavior,
 React scheduling, native ICE, or media transport. The browser suite exercises

@@ -6,6 +6,15 @@ export type PeerCallbacks = ConstructorParameters<typeof PeerSession>[1]
 type ChannelMessage = Pick<MessageEvent<string>, "data">
 type DataChannelEvent = { channel: Channel }
 type BrowserGlobals = Record<string, unknown>
+type MediaPromise = ReturnType<typeof Promise.withResolvers<MediaStream>>
+interface CapturedTrack {
+  readyState: MediaStreamTrackState
+  stop(): void
+}
+interface MediaCapture extends MediaPromise {
+  stream: MediaStream
+  track: CapturedTrack
+}
 
 class Channel {
   readyState: RTCDataChannelState = "open"
@@ -34,6 +43,7 @@ export function createRtcHarness(globals: BrowserGlobals = {}) {
     localDescription: RTCSessionDescriptionInit | null = null
     signalingState: RTCSignalingState = "stable"
     candidates: RTCIceCandidateInit[] = []
+    senders: Pick<RTCRtpSender, "track">[] = []
     closed = false
 
     declare ondatachannel: (event: DataChannelEvent) => void
@@ -77,6 +87,19 @@ export function createRtcHarness(globals: BrowserGlobals = {}) {
       this.candidates.push(candidate)
     }
 
+    addTrack(track: MediaStreamTrack) {
+      if (this.closed) throw new Error("Connection closed")
+      this.senders.push({ track })
+    }
+
+    getSenders() {
+      return this.senders
+    }
+
+    removeTrack(sender: Pick<RTCRtpSender, "track">) {
+      this.senders = this.senders.filter((current) => current !== sender)
+    }
+
     close() {
       this.closed = true
       this.signalingState = "closed"
@@ -102,4 +125,32 @@ export function createRtcHarness(globals: BrowserGlobals = {}) {
   })
 
   return { PeerSession, connections, Channel, createCallbacks }
+}
+
+export function createMediaHarness() {
+  const captures: MediaCapture[] = []
+  const rtc = createRtcHarness({
+    navigator: {
+      mediaDevices: {
+        getUserMedia() {
+          const track: MediaCapture["track"] = {
+            readyState: "live",
+            stop() {
+              this.readyState = "ended"
+            },
+          }
+          // Only the browser methods exercised by PeerSession are modeled.
+          const stream = { getTracks: () => [track] } as unknown as MediaStream
+          const capture = {
+            ...Promise.withResolvers<MediaStream>(),
+            stream,
+            track,
+          }
+          captures.push(capture)
+          return capture.promise
+        },
+      },
+    },
+  })
+  return { ...rtc, captures }
 }

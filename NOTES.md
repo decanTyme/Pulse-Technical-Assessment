@@ -59,7 +59,7 @@ Pending. No visual redesign has been selected or implemented.
 
 ## Phase 3: Make it secure
 
-Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. Session ownership and server-side connection consent are implemented; the other baseline controls remain pending.
+Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. Session ownership, server-side connection consent, and media-acquisition cancellation are implemented; the other controls remain pending.
 
 ### Private session ownership
 
@@ -90,6 +90,14 @@ Leaving or stale-session removal releases the matching partner and notifies it i
 The [migration](prisma/migrations/20261008010000_connection_consent/migration.sql) adds five nullable columns and two indexes, preserving existing rows. Development and isolated test schemas were synchronized without resets or data-loss flags. Existing participants should re-enter; legacy signals without an attempt ID are drained without delivery.
 
 Verification: **all 41 Node checks passed**, and **all 22 Chromium checks passed on their first attempts** against the production build. The latter includes 19 browser journeys and three real API/PostgreSQL checks. [Consent regressions](tests/e2e/consent.spec.ts) exercise competing requests, duplicate acceptances, third-participant controls, and obsolete attempts through HTTP. These verify selected concurrency scenarios, not every interleaving or a load guarantee. TypeScript and scoped source lint checks passed. Broader delayed-response recovery remains deferred.
+
+### Cancelling pending camera and microphone capture
+
+A delayed-capture regression reproduced tracks remaining live after `stopVideo()` ran while capture was pending. I kept the correction in [PeerSession](lib/webrtc.ts) and the two [page callbacks](app/page.tsx): repeated starts share one pending acquisition, stop/close invalidates it, and late tracks are stopped before attachment. A cancelled acquisition returns `null`; permission failures still reject. The page checks the current peer and video attempt before applying success or failure, so obsolete callbacks cannot reopen video or report a camera error for a newer attempt.
+
+This cancels the application's use of a capture result; it does not dismiss an outstanding browser permission prompt. Three focused regressions cover stop, close, and shared capture/retry without a new test framework or broader recovery suite. Native permission timing remains separate verification.
+
+Verification: **all 44 Node checks** and **all five existing Chromium video journeys passed**, with no browser retries. The production build, TypeScript, and scoped lint checks passed. The full browser suite was not repeated for this media-only change.
 
 ## Phase 4: Make it better
 

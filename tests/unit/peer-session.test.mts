@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createRtcHarness } from "../helpers/webrtc.mts"
+import { createMediaHarness, createRtcHarness } from "../helpers/webrtc.mts"
 
 const candidate: RTCIceCandidateInit = {
   candidate: "test-candidate",
@@ -12,6 +12,63 @@ const offer: RTCSessionDescriptionInit = {
   type: "offer",
   sdp: "test-description",
 }
+
+test("stopping video while capture is pending stops late tracks without sending them", async () => {
+  const rtc = createMediaHarness()
+  const session = new rtc.PeerSession(true, rtc.createCallbacks())
+  const pending = session.startVideo()
+
+  session.stopVideo()
+  const capture = rtc.captures[0]
+  capture.resolve(capture.stream)
+
+  const result = await pending
+  assert.equal(capture.track.readyState, "ended")
+  assert.deepEqual(rtc.connections[0].getSenders(), [])
+  assert.equal(result, null)
+})
+
+test("closing a session stops late capture and prevents another acquisition", async () => {
+  const rtc = createMediaHarness()
+  const session = new rtc.PeerSession(true, rtc.createCallbacks())
+  const pending = session.startVideo()
+
+  session.close()
+  const capture = rtc.captures[0]
+  capture.resolve(capture.stream)
+
+  assert.equal(await pending, null)
+  assert.equal(capture.track.readyState, "ended")
+  assert.deepEqual(rtc.connections[0].getSenders(), [])
+  assert.equal(await session.startVideo(), null)
+  assert.equal(rtc.captures.length, 1)
+})
+
+test("concurrent video starts share capture and cancelled capture cannot replace a retry", async () => {
+  const rtc = createMediaHarness()
+  const session = new rtc.PeerSession(true, rtc.createCallbacks())
+  const first = session.startVideo()
+  const repeated = session.startVideo()
+  assert.equal(rtc.captures.length, 1)
+
+  session.stopVideo()
+  const retry = session.startVideo()
+  assert.equal(rtc.captures.length, 2)
+  const [oldCapture, newCapture] = rtc.captures
+  newCapture.resolve(newCapture.stream)
+  assert.equal(await retry, newCapture.stream)
+
+  oldCapture.resolve(oldCapture.stream)
+  assert.deepEqual(await Promise.all([first, repeated]), [null, null])
+  assert.equal(oldCapture.track.readyState, "ended")
+  assert.equal(newCapture.track.readyState, "live")
+  assert.equal(await session.startVideo(), newCapture.stream)
+  assert.equal(rtc.connections[0].getSenders().length, 1)
+
+  session.stopVideo()
+  assert.equal(newCapture.track.readyState, "ended")
+  assert.deepEqual(rtc.connections[0].getSenders(), [])
+})
 
 test("chat sent by one session reaches the other session's chat callback", () => {
   const rtc = createRtcHarness()

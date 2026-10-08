@@ -52,7 +52,10 @@ export default function Home() {
 
   const [video, _setVideo] = useState<VideoState>("none")
   const videoRef = useRef<VideoState>(video)
+  const videoAttemptRef = useRef(0)
+
   const setVideo = (v: VideoState) => {
+    videoAttemptRef.current++
     videoRef.current = v
     _setVideo(v)
   }
@@ -66,6 +69,10 @@ export default function Home() {
 
   function isCurrentAttempt(attempt: Conn) {
     return connRef.current === attempt
+  }
+
+  function isCurrentVideoAttempt(peer: PeerSession, attempt: number) {
+    return peerRef.current === peer && videoAttemptRef.current === attempt
   }
 
   function queueSignal(
@@ -211,12 +218,15 @@ export default function Home() {
         break
       case "video-accept":
         if (videoRef.current === "requesting" && ps) {
+          const attempt = videoAttemptRef.current
           ps.startVideo()
             .then((stream) => {
+              if (!stream || !isCurrentVideoAttempt(ps, attempt)) return
               setLocalStream(stream)
               setVideo("active")
             })
             .catch(() => {
+              if (!isCurrentVideoAttempt(ps, attempt)) return
               setVideo("none")
               ps.sendControl("video-end")
               showNotice("Camera unavailable.")
@@ -225,6 +235,7 @@ export default function Home() {
         break
       case "video-decline":
         if (videoRef.current === "requesting") {
+          ps?.stopVideo()
           setVideo("none")
           showNotice("Video declined.")
         }
@@ -354,14 +365,17 @@ export default function Home() {
 
   function acceptVideo() {
     const ps = peerRef.current
-    if (!ps) return
+    if (!ps || videoRef.current !== "incoming") return
+    const attempt = videoAttemptRef.current
     ps.startVideo()
       .then((stream) => {
+        if (!stream || !isCurrentVideoAttempt(ps, attempt)) return
         setLocalStream(stream)
         ps.sendControl("video-accept")
         setVideo("active")
       })
       .catch(() => {
+        if (!isCurrentVideoAttempt(ps, attempt)) return
         ps.sendControl("video-decline")
         setVideo("none")
         showNotice("Camera unavailable.")
@@ -369,6 +383,7 @@ export default function Home() {
   }
 
   function declineVideo() {
+    peerRef.current?.stopVideo()
     peerRef.current?.sendControl("video-decline")
     setVideo("none")
   }

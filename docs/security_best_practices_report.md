@@ -1,8 +1,8 @@
 # Security review
 
-The initial review was conducted on 2026-10-08 against commit `b7c7fb6`. Session ownership (001) and connection consent (002) are implemented and verified. Findings 003–010 remain open, with baseline and hardening priorities listed below. Original findings are retained alongside their resolutions and verification results.
+The initial review was conducted on 2026-10-08 against commit `b7c7fb6`. Session ownership (001), connection consent (002), and media-acquisition cancellation (003) are implemented. Verification and its limits are recorded with each resolution. Findings 004–010 remain open, with baseline and hardening priorities listed below. Original findings are retained alongside their resolutions and verification results.
 
-The review identified session ownership, connection authorization, and camera/microphone cancellation as the highest-impact risks. Private credentials authorize session operations, while server-owned connection state enforces recipient consent and pair membership. The remaining baseline priorities are media cancellation, bounded API inputs and abuse controls, and accurate privacy wording.
+The review identified session ownership, connection authorization, and camera/microphone cancellation as the highest-impact risks. Private credentials authorize session operations, server-owned connection state enforces recipient consent and pair membership, and media cancellation stops capture results from obsolete attempts. Bounded API inputs, abuse controls, and accurate privacy wording remain open priorities.
 
 ## Scope and evidence
 
@@ -20,7 +20,7 @@ Severity reflects impact at discovery. The baseline column identifies controls r
 | --- | -------- | ----------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
 | 001 | High     | Public IDs authorized private session operations            | Completed: per-session ownership checks                     | Review expiration/replay behavior                    |
 | 002 | High     | Signals can change unrelated connections without consent    | Completed: recipient consent, pair checks, atomic admission | Broaden concurrency and delayed-write testing        |
-| 003 | High     | Late media acquisition survives stop/disconnect             | Cancel acquisition logically and stop late tracks           | Native-device timing checks                          |
+| 003 | High     | Late media acquisition survives stop/disconnect             | Completed: cancel pending capture and stop late tracks      | Native-device timing checks                          |
 | 004 | Medium   | Request and signaling validation is incomplete              | Bound bodies/IDs and validate payloads by signal type       | Extend malformed-input coverage as needed            |
 | 005 | Medium   | Coordination work and storage lack application abuse limits | Set and verify practical request/queue budgets              | Adaptive controls and broader load testing           |
 | 006 | Medium   | Privacy copy overpromises storage and deletion behavior     | Correct the copy and disclose coordination/network metadata | Bound physical retention independently of visitors   |
@@ -63,15 +63,17 @@ Pair transitions and mailbox writes share a serializable transaction. [Bounded r
 
 **Remaining considerations:** these concurrency cases do not prove every interleaving or load behavior. Existing participants must re-enter; legacy signals without an attempt ID are drained without delivery. Matching `end` handling also covers a waiting requester, but the separately deferred lost-acceptance-response scenario has not been rerun. Broader delayed-response and cleanup recovery remains verification work.
 
-### 003: Camera/microphone acquisition can complete after consent has been withdrawn
+### 003: Camera/microphone acquisition could survive withdrawn consent — resolved
 
 **Rule:** application media-consent/lifecycle boundary. **Evidence:** confirmed with synthetic media and RTC doubles.
 
-[`startVideo`](../lib/webrtc.ts#L199) assigns the result of `getUserMedia` and attaches its tracks after the await. [`stopVideo`](../lib/webrtc.ts#L212) stops only an already-assigned stream; [`close`](../lib/webrtc.ts#L259) does not invalidate pending acquisition. The [page callbacks](../app/page.tsx#L214) can also set video active after an old acquisition completes.
+**Original behavior:** `startVideo` assigned the result of `getUserMedia` and attached its tracks after the await without checking cancellation. `stopVideo` stopped only an already-assigned stream; `close` did not invalidate pending acquisition. Page callbacks could also set video active after an obsolete acquisition completed.
 
 **Impact:** stopping video while acquisition is pending can still attach the returned tracks to the live peer. Closing the peer first causes track attachment to fail, but the acquired tracks remain unstopped. The probes establish those lifecycle errors; no camera or microphone was opened during the review.
 
-**Baseline requirement:** stopping or closing must invalidate pending media acquisition and stop any tracks returned for a cancelled attempt. Each attempt should share one pending acquisition, with success and failure callbacks guarded against a changed peer or video attempt. Delayed-acquisition regression tests should verify these lifecycle boundaries.
+**Resolution:** [PeerSession](../lib/webrtc.ts) shares one pending acquisition and invalidates it on stop/close. A cancelled result has every track stopped before attachment and resolves to `null`; an actual capture failure still rejects. [Page callbacks](../app/page.tsx) check the current peer and video attempt before applying success or failure, preventing an obsolete callback from reopening video or affecting a newer attempt. Declining video also stops pending acquisition.
+
+**Verification:** the focused regression reproduced a late track remaining live after stop, then passed after the fix. Three regressions cover stopping, closing, and shared acquisition/retry through the public peer-session methods with controlled browser APIs. All 44 Node checks and all five existing Chromium video journeys passed, with each browser check passing on its first attempt. The production build, TypeScript and scoped lint passed; the full browser suite was not repeated. Native permission-prompt timing and delayed browser callback scenarios remain separate verification; cancellation prevents use of a late result rather than dismissing the browser prompt.
 
 ## Medium severity
 
@@ -107,7 +109,7 @@ Join can create arbitrarily many sessions; signal writes have no per-actor or qu
 
 **Rule:** runtime input/resource bounds at the peer boundary. **Evidence:** static finding; no browser stress test was performed.
 
-The [data-channel handler](../lib/webrtc.ts#L98) accepts chat strings without length/rate limits and casts control strings to `PeerControl`. [Message history](../app/page.tsx#L141) and [pending ICE candidates](../lib/webrtc.ts#L136) grow without explicit bounds.
+The [data-channel handler](../lib/webrtc.ts#L99) accepts chat strings without length/rate limits and casts control strings to `PeerControl`. [Message history](../app/page.tsx#L148) and [pending ICE candidates](../lib/webrtc.ts#L137) grow without explicit bounds.
 
 **Impact:** a malicious accepted peer can grow client memory and rendering work. React escapes message text; this finding is resource abuse, not a demonstrated XSS issue.
 
@@ -141,6 +143,6 @@ The [offset function](../lib/geo.ts#L15) approximates degree distances and clamp
 
 ## Implementation order and remaining verification
 
-The next baseline priority is media cancellation (003), followed by input and abuse limits (004/005), and privacy wording (006). Actor and pair boundaries support the later abuse controls. Each control requires focused regression coverage and verification against the core journeys it affects.
+Input and abuse limits (004/005), privacy wording (006), and deployment configuration remain open security priorities. Actor and pair boundaries support the abuse controls. Each implemented control requires focused regression coverage and verification against the core journeys it affects.
 
 Deployment readiness also requires verification of production headers and TLS, Mapbox public-token scopes and URL restrictions, and runtime database-role privileges. These account settings remain uninspected. A browser-visible Mapbox public token is expected and does not imply a leaked server secret. The separately documented acceptance-response-loss scenario remains unverified after the matching-end change; the core suite does not exercise that fault-injection case.

@@ -21,18 +21,19 @@ export class PeerSession {
   private pc: RTCPeerConnection
   private dc: RTCDataChannel | null = null
 
+  private readonly cb: PeerCallbacks
   private readonly polite: boolean
   private localStream: MediaStream | null = null
-  private closed = false
-  private readonly cb: PeerCallbacks
   private pendingCandidates: RTCIceCandidateInit[] = []
   private incomingSignals: Promise<void> = Promise.resolve()
-  private remoteEnding = false
+  private pendingVideo: Promise<MediaStream | null> | null = null
   private chatEnd: Promise<void> | null = null
   private completeChatEnd: (() => void) | null = null
 
+  private closed = false
   private makingOffer = false
   private ignoreOffer = false
+  private remoteEnding = false
 
   constructor(initiator: boolean, cb: PeerCallbacks) {
     this.cb = cb
@@ -196,20 +197,44 @@ export class PeerSession {
     return false
   }
 
-  async startVideo(): Promise<MediaStream> {
-    if (!this.localStream) {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+  async startVideo(): Promise<MediaStream | null> {
+    if (this.closed) return null
+    if (this.localStream) return this.localStream
+    if (this.pendingVideo) return this.pendingVideo
+
+    const acquisition: Promise<MediaStream | null> = navigator.mediaDevices
+      .getUserMedia({
         video: true,
         audio: true,
       })
-      for (const track of this.localStream.getTracks()) {
-        this.pc.addTrack(track, this.localStream)
-      }
-    }
-    return this.localStream
+      .then((stream) => {
+        // Stopping cannot dismiss the browser's capture prompt. Stop any tracks
+        // it returns after this acquisition was cancelled or replaced.
+        if (this.closed || this.pendingVideo !== acquisition) {
+          for (const track of stream.getTracks()) track.stop()
+          return null
+        }
+
+        this.localStream = stream
+        try {
+          for (const track of stream.getTracks())
+            this.pc.addTrack(track, stream)
+          return stream
+        } catch (error) {
+          this.stopVideo()
+          throw error
+        }
+      })
+      .finally(() => {
+        if (this.pendingVideo === acquisition) this.pendingVideo = null
+      })
+
+    this.pendingVideo = acquisition
+    return acquisition
   }
 
   stopVideo() {
+    this.pendingVideo = null
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) track.stop()
       for (const sender of this.pc.getSenders()) {
