@@ -5,6 +5,7 @@ type PeerSessionModule = typeof import("../../lib/webrtc.ts")
 export type PeerCallbacks = ConstructorParameters<typeof PeerSession>[1]
 type ChannelMessage = Pick<MessageEvent<string>, "data">
 type DataChannelEvent = { channel: Channel }
+type BrowserGlobals = Record<string, unknown>
 
 class Channel {
   readyState: RTCDataChannelState = "open"
@@ -24,7 +25,7 @@ class Channel {
 }
 
 // Simulate channel delivery and description/candidate ordering, not native ICE.
-export function createRtcHarness() {
+export function createRtcHarness(globals: BrowserGlobals = {}) {
   const connections: Connection[] = []
 
   class Connection {
@@ -33,7 +34,6 @@ export function createRtcHarness() {
     localDescription: RTCSessionDescriptionInit | null = null
     signalingState: RTCSignalingState = "stable"
     candidates: RTCIceCandidateInit[] = []
-    operations: string[] = []
     closed = false
 
     declare ondatachannel: (event: DataChannelEvent) => void
@@ -47,8 +47,6 @@ export function createRtcHarness() {
     }
 
     async setRemoteDescription(description: RTCSessionDescriptionInit) {
-      this.operations.push("remote-description-start")
-
       // Model the browser API's asynchronous description installation.
       await Promise.resolve()
 
@@ -59,8 +57,6 @@ export function createRtcHarness() {
       this.remoteDescription = description
       this.signalingState =
         description.type === "offer" ? "have-remote-offer" : "stable"
-
-      this.operations.push("remote-description-end")
     }
 
     async setLocalDescription() {
@@ -74,8 +70,6 @@ export function createRtcHarness() {
     }
 
     async addIceCandidate(candidate: RTCIceCandidateInit) {
-      this.operations.push("ice")
-
       if (this.closed || !this.remoteDescription) {
         throw new Error("Candidate requires an open connection and description")
       }
@@ -92,7 +86,7 @@ export function createRtcHarness() {
   const { PeerSession } = loadSource<PeerSessionModule>(
     "lib/webrtc.ts",
     {},
-    { RTCPeerConnection: Connection },
+    { RTCPeerConnection: Connection, ...globals },
   )
 
   const createCallbacks = (

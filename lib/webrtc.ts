@@ -15,6 +15,8 @@ const ICE_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 }
 
+const CHAT_END_TIMEOUT_MS = 3_000
+
 export class PeerSession {
   private pc: RTCPeerConnection
   private dc: RTCDataChannel | null = null
@@ -25,6 +27,9 @@ export class PeerSession {
   private readonly cb: PeerCallbacks
   private pendingCandidates: RTCIceCandidateInit[] = []
   private incomingSignals: Promise<void> = Promise.resolve()
+  private remoteEnding = false
+  private chatEnd: Promise<void> | null = null
+  private completeChatEnd: (() => void) | null = null
 
   private makingOffer = false
   private ignoreOffer = false
@@ -57,7 +62,9 @@ export class PeerSession {
     }
 
     this.pc.onconnectionstatechange = () => {
-      if (!this.closed) this.cb.onConnectionState(this.pc.connectionState)
+      if (!this.closed && !this.remoteEnding && !this.chatEnd) {
+        this.cb.onConnectionState(this.pc.connectionState)
+      }
     }
 
     if (initiator) {
@@ -77,8 +84,15 @@ export class PeerSession {
     }
 
     dc.onclose = () => {
+      if (this.completeChatEnd) {
+        this.completeChatEnd()
+        return
+      }
       // Remote channel closure can precede any peer-connection state change.
-      if (!this.closed) this.cb.onConnectionState("closed")
+      // A graceful hangup is already coordinated; its end arrives through polling.
+      if (!this.closed && !this.remoteEnding) {
+        this.cb.onConnectionState("closed")
+      }
     }
 
     dc.onmessage = (e) => {
@@ -87,7 +101,14 @@ export class PeerSession {
         if (msg.t === "chat" && typeof msg.text === "string") {
           this.cb.onChat(msg.text)
         } else if (msg.t === "ctrl" && typeof msg.ctrl === "string") {
-          this.cb.onControl(msg.ctrl as PeerControl)
+          if (msg.ctrl === "chat-end") {
+            this.remoteEnding = true
+            this.safeSend({ t: "ctrl", ctrl: "chat-end-ack" })
+          } else if (msg.ctrl === "chat-end-ack") {
+            this.completeChatEnd?.()
+          } else {
+            this.cb.onControl(msg.ctrl as PeerControl)
+          }
         }
       } catch {}
     }
@@ -202,8 +223,45 @@ export class PeerSession {
     }
   }
 
+  // Call only after end coordination succeeds. Wait for delivery acknowledgement
+  // before closing the transport, so normal hangup does not trigger a second end.
+  endChat(): Promise<void> {
+    if (this.chatEnd) return this.chatEnd
+    if (this.closed || this.dc?.readyState !== "open") {
+      this.close()
+      return Promise.resolve()
+    }
+
+    this.chatEnd = new Promise((resolve) => {
+      const timer = setTimeout(
+        () => this.completeChatEnd?.(),
+        CHAT_END_TIMEOUT_MS,
+      )
+
+      this.completeChatEnd = () => {
+        clearTimeout(timer)
+        this.completeChatEnd = null
+        this.close()
+        resolve()
+      }
+
+      try {
+        if (!this.safeSend({ t: "ctrl", ctrl: "chat-end" })) {
+          this.completeChatEnd()
+        }
+      } catch {
+        this.completeChatEnd()
+      }
+    })
+    return this.chatEnd
+  }
+
   close() {
     if (this.closed) return
+    if (this.completeChatEnd) {
+      this.completeChatEnd()
+      return
+    }
 
     this.closed = true
     this.pendingCandidates = []

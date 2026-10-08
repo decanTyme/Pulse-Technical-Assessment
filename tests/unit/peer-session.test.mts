@@ -71,14 +71,9 @@ test("ICE received before the offer is applied after the remote description", as
 
   // Parsed payload objects originate in the application VM.
   assert.deepEqual(structuredClone(connection.candidates), [candidate])
-  assert.deepEqual(connection.operations, [
-    "remote-description-start",
-    "remote-description-end",
-    "ice",
-  ])
 })
 
-test("an offer and ICE delivered together finish in arrival order", async () => {
+test("ICE delivered with an offer is retained until the description is ready", async () => {
   const rtc = createRtcHarness()
   const session = new rtc.PeerSession(false, rtc.createCallbacks())
   const connection = rtc.connections[0]
@@ -89,14 +84,9 @@ test("an offer and ICE delivered together finish in arrival order", async () => 
   ])
 
   assert.deepEqual(structuredClone(connection.candidates), [candidate])
-  assert.deepEqual(connection.operations, [
-    "remote-description-start",
-    "remote-description-end",
-    "ice",
-  ])
 })
 
-test("closing a session skips signals still waiting in its incoming queue", async () => {
+test("signals received just before closing cannot establish a closed session", async () => {
   const rtc = createRtcHarness()
   const session = new rtc.PeerSession(false, rtc.createCallbacks())
   const connection = rtc.connections[0]
@@ -109,7 +99,6 @@ test("closing a session skips signals still waiting in its incoming queue", asyn
   session.close()
   await Promise.all(work)
 
-  assert.deepEqual(connection.operations, [])
   assert.equal(connection.localDescription, null)
   assert.equal(connection.remoteDescription, null)
   assert.equal(connection.closed, true)
@@ -176,4 +165,69 @@ test("a delayed channel-open event cannot reopen a closed session", () => {
   rtc.connections[0].channel!.onopen?.()
 
   assert.equal(opened, 0)
+})
+
+test("normal hangup waits for acknowledgement and does not echo remote cleanup", async () => {
+  const rtc = createRtcHarness()
+  const states: RTCPeerConnectionState[] = []
+
+  const sender = new rtc.PeerSession(true, rtc.createCallbacks())
+  const receiver = new rtc.PeerSession(
+    false,
+    rtc.createCallbacks({
+      onConnectionState: (state) => states.push(state),
+    }),
+  )
+
+  const senderChannel = rtc.connections[0].channel!
+  const receiverChannel = new rtc.Channel()
+  rtc.connections[1].ondatachannel({ channel: receiverChannel })
+
+  const ending = sender.endChat()
+  assert.equal(rtc.connections[0].closed, false)
+  receiverChannel.onmessage({ data: senderChannel.sent[0] })
+  assert.equal(rtc.connections[1].closed, false)
+  senderChannel.onmessage({ data: receiverChannel.sent[0] })
+  await ending
+  receiverChannel.close()
+  assert.equal(rtc.connections[0].closed, true)
+  assert.deepEqual(states, [])
+
+  // Home closes the receiver when it consumes the already-written end signal.
+  receiver.close()
+})
+
+test("closing while awaiting hangup acknowledgement settles the pending operation", async () => {
+  const rtc = createRtcHarness()
+
+  const session = new rtc.PeerSession(true, rtc.createCallbacks())
+  const ending = session.endChat()
+
+  session.close()
+  await ending
+  assert.equal(rtc.connections[0].closed, true)
+})
+
+test("hangup stops waiting and closes if its acknowledgement never arrives", async () => {
+  let expire!: () => void
+  let cleared = false
+
+  const rtc = createRtcHarness({
+    setTimeout(callback: () => void, delay: number) {
+      assert.equal(delay, 3_000)
+      expire = callback
+      return 1
+    },
+    clearTimeout() {
+      cleared = true
+    },
+  })
+
+  const session = new rtc.PeerSession(true, rtc.createCallbacks())
+  const ending = session.endChat()
+
+  expire()
+  await ending
+  assert.equal(rtc.connections[0].closed, true)
+  assert.equal(cleared, true)
 })

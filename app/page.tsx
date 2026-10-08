@@ -9,7 +9,7 @@ import VideoPanel from "./components/VideoPanel"
 import { join, leave, poll, sendSignal } from "@/lib/api"
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc"
 import { POLL_INTERVAL_MS } from "@/lib/presence"
-import { type PeerDot, type SignalMsg } from "@/lib/types"
+import { type PeerDot, type SignalMsg, type SignalType } from "@/lib/types"
 
 type Conn =
   | { kind: "idle" }
@@ -19,6 +19,13 @@ type Conn =
   | { kind: "connected"; peerId: string }
 
 type VideoState = "none" | "requesting" | "incoming" | "active"
+
+interface PendingCleanup {
+  peerId: string
+  peer: PeerSession | null
+  operation: Promise<void>
+  failed: boolean
+}
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -52,6 +59,61 @@ export default function Home() {
   const peerRef = useRef<PeerSession | null>(null)
   const msgId = useRef(0)
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const writtenRequest = useRef<Conn | null>(null)
+  const outgoingSignals = useRef<Promise<void>>(Promise.resolve())
+  const pendingCleanup = useRef<PendingCleanup | null>(null)
+
+  function isCurrentAttempt(attempt: Conn) {
+    return connRef.current === attempt
+  }
+
+  function queueSignal(
+    peerId: string,
+    type: SignalType,
+    payload?: string,
+    shouldSend: () => boolean = () => true,
+  ): Promise<void> {
+    const operation = outgoingSignals.current.then(async () => {
+      if (shouldSend()) await sendSignal(sessionId, peerId, type, payload)
+    })
+    // A rejection remains visible to its caller without blocking later cleanup.
+    outgoingSignals.current = operation.catch(() => {})
+    return operation
+  }
+
+  function releasePeer(peerId: string, peer: PeerSession | null = null) {
+    const previous = pendingCleanup.current
+    if (previous?.peerId === peerId && !previous.failed) {
+      return previous.operation
+    }
+
+    const cleanup: PendingCleanup = {
+      peerId,
+      peer,
+      operation: Promise.resolve(),
+      failed: false,
+    }
+    pendingCleanup.current = cleanup
+    cleanup.operation = queueSignal(peerId, "end")
+      .then(() => peer?.endChat())
+      .then(() => {
+        if (pendingCleanup.current === cleanup) pendingCleanup.current = null
+      })
+      .catch((error: unknown) => {
+        cleanup.failed = true
+        peer?.close()
+        throw error
+      })
+    return cleanup.operation
+  }
+
+  async function finishCleanup() {
+    const cleanup = pendingCleanup.current
+    if (!cleanup) return
+    // A new user attempt may retry end; never automatically retry request/accept.
+    if (cleanup.failed) await releasePeer(cleanup.peerId, cleanup.peer)
+    else await cleanup.operation
+  }
 
   function showNotice(text: string) {
     setNotice(text)
@@ -62,15 +124,17 @@ export default function Home() {
     setMessages((prev) => [...prev, { id: msgId.current++, mine, text }])
   }
 
-  function teardown(message?: string) {
+  function teardown(message?: string, closePeer = true) {
     if (requestTimer.current) {
       clearTimeout(requestTimer.current)
     }
     requestTimer.current = null
+    writtenRequest.current = null
 
     const peer = peerRef.current
     peerRef.current = null
-    peer?.close()
+    peer?.stopVideo()
+    if (closePeer) peer?.close()
 
     setLocalStream(null)
     setRemoteStream(null)
@@ -78,18 +142,34 @@ export default function Home() {
     setMessages([])
     setConn({ kind: "idle" })
     if (message) showNotice(message)
+    return peer
   }
 
   function startPeer(peerId: string, initiator: boolean) {
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
         if (peerRef.current === ps) {
-          void sendSignal(sessionId, peerId, type, payload)
+          void queueSignal(
+            peerId,
+            type,
+            payload,
+            () => peerRef.current === ps,
+          ).catch(() => {
+            if (peerRef.current === ps) {
+              disconnect("Connection request failed. Please try again.")
+            }
+          })
         }
       },
-      onChat: (text) => addMessage(false, text),
-      onControl: (ctrl) => handleControl(ctrl),
-      onRemoteStream: (stream) => setRemoteStream(stream),
+      onChat: (text) => {
+        if (peerRef.current === ps) addMessage(false, text)
+      },
+      onControl: (ctrl) => {
+        if (peerRef.current === ps) handleControl(ctrl)
+      },
+      onRemoteStream: (stream) => {
+        if (peerRef.current === ps) setRemoteStream(stream)
+      },
       onConnectionState: (state) => {
         if (peerRef.current !== ps) return
         if (state === "failed") {
@@ -141,51 +221,98 @@ export default function Home() {
     }
   }
 
-  function requestConnection(peerId: string) {
+  async function requestConnection(peerId: string) {
     if (connRef.current.kind !== "idle") return
-    setConn({ kind: "requesting", peerId })
-    void sendSignal(sessionId, peerId, "request")
+    const attempt: Conn = { kind: "requesting", peerId }
+    setConn(attempt)
     requestTimer.current = setTimeout(() => {
-      if (
-        connRef.current.kind === "requesting" &&
-        connRef.current.peerId === peerId
-      ) {
-        void sendSignal(sessionId, peerId, "end")
+      if (isCurrentAttempt(attempt)) {
+        const needsCleanup = writtenRequest.current === attempt
         teardown("No answer.")
+        if (needsCleanup) {
+          void releasePeer(peerId).catch(() => {
+            showNotice("Couldn't finish disconnecting. Please try again.")
+          })
+        }
       }
     }, REQUEST_TIMEOUT_MS)
+
+    try {
+      await finishCleanup()
+      await queueSignal(peerId, "request", undefined, () => {
+        if (!isCurrentAttempt(attempt)) return false
+        writtenRequest.current = attempt
+        return true
+      })
+    } catch {
+      if (!isCurrentAttempt(attempt)) return
+      const needsCleanup = writtenRequest.current === attempt
+      teardown("Connection request failed. Please try again.")
+      if (needsCleanup) {
+        void releasePeer(peerId).catch(() => {
+          showNotice("Couldn't finish disconnecting. Please try again.")
+        })
+      }
+    }
   }
 
   function cancelRequest() {
-    if (connRef.current.kind === "requesting") {
-      void sendSignal(sessionId, connRef.current.peerId, "end")
-    }
+    const current = connRef.current
+    const needsCleanup = writtenRequest.current === current
     teardown()
+    if (current.kind === "requesting" && needsCleanup) {
+      void releasePeer(current.peerId).catch(() => {
+        showNotice("Couldn't finish disconnecting. Please try again.")
+      })
+    }
   }
 
-  function acceptIncoming() {
+  async function acceptIncoming() {
     if (connRef.current.kind !== "incoming") return
     const peerId = connRef.current.peerId
-    startPeer(peerId, false)
-    void sendSignal(sessionId, peerId, "accept")
-    setConn({ kind: "connecting", peerId })
+    const attempt: Conn = { kind: "connecting", peerId }
+    let peer: PeerSession | null = null
+    setConn(attempt)
+    try {
+      await finishCleanup()
+      if (!isCurrentAttempt(attempt)) return
+      startPeer(peerId, false)
+      peer = peerRef.current
+      await queueSignal(
+        peerId,
+        "accept",
+        undefined,
+        () => peerRef.current === peer,
+      )
+    } catch {
+      if (isCurrentAttempt(attempt) || (peer && peerRef.current === peer)) {
+        disconnect("Connection request failed. Please try again.")
+      }
+    }
   }
 
   function declineIncoming() {
     if (connRef.current.kind !== "incoming") return
-    void sendSignal(sessionId, connRef.current.peerId, "decline")
+    void queueSignal(connRef.current.peerId, "decline").catch(() => {
+      showNotice("Couldn't decline the request. Please try again.")
+    })
     setConn({ kind: "idle" })
   }
 
   function disconnect(message?: string) {
     const c = connRef.current
     if (c.kind === "connecting" || c.kind === "connected") {
-      // The leave endpoint removes the departed peer; end releases our reservation.
-      void sendSignal(sessionId, c.peerId, "end").catch(() => {
-        if (connRef.current.kind === "idle") {
+      const peer = teardown(message, false)
+      if (peer) {
+        // Keep the transport for a normal hangup acknowledgement after cleanup.
+        void releasePeer(c.peerId, peer).catch(() => {
           showNotice("Couldn't finish disconnecting. Please try again.")
-        }
-      })
+        })
+      } else {
+        // Acceptance was cancelled while waiting for an earlier cleanup.
+        void queueSignal(c.peerId, "decline").catch(() => {})
+      }
+      return
     }
 
     teardown(message)
@@ -237,7 +364,7 @@ export default function Home() {
         if (connRef.current.kind === "idle") {
           setConn({ kind: "incoming", peerId: sig.fromId })
         } else {
-          void sendSignal(sessionId, sig.fromId, "decline")
+          void queueSignal(sig.fromId, "decline").catch(() => {})
         }
         break
       }
@@ -245,6 +372,8 @@ export default function Home() {
         const c = connRef.current
         if (c.kind === "requesting" && c.peerId === sig.fromId) {
           if (requestTimer.current) clearTimeout(requestTimer.current)
+          requestTimer.current = null
+          writtenRequest.current = null
           startPeer(sig.fromId, true)
           setConn({ kind: "connecting", peerId: sig.fromId })
         }
@@ -265,10 +394,14 @@ export default function Home() {
         const peerId =
           c.kind === "connecting" || c.kind === "connected" ? c.peerId : null
         if (peerRef.current && peerId === sig.fromId) {
-          void peerRef.current.handleSignal(
-            sig.type as DescType,
-            sig.payload ?? "",
-          )
+          const peer = peerRef.current
+          void peer
+            .handleSignal(sig.type as DescType, sig.payload ?? "")
+            .catch(() => {
+              if (peerRef.current === peer) {
+                disconnect("Connection request failed. Please try again.")
+              }
+            })
         }
         break
       }
