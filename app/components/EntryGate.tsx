@@ -3,7 +3,7 @@
 import { useState } from "react"
 
 interface EntryGateProps {
-  onReady: (lat: number, lng: number) => Promise<void>
+  onReady: (lat: number, lng: number, status: string) => Promise<void>
 }
 
 type EntryStatus = "idle" | "locating" | "joining" | "error"
@@ -11,6 +11,7 @@ type EntryStatus = "idle" | "locating" | "joining" | "error"
 export default function EntryGate({ onReady }: EntryGateProps) {
   const [status, setStatus] = useState<EntryStatus>("idle")
   const [error, setError] = useState<string>("")
+  const [conversationStatus, setConversationStatus] = useState("")
 
   const isEntering = status === "locating" || status === "joining"
 
@@ -26,7 +27,7 @@ export default function EntryGate({ onReady }: EntryGateProps) {
       async (pos) => {
         setStatus("joining")
         try {
-          await onReady(pos.coords.latitude, pos.coords.longitude)
+          await onReady(pos.coords.latitude, pos.coords.longitude, conversationStatus.trim())
         } catch {
           setStatus("error")
           setError("Couldn't enter Pulse. Please try again.")
@@ -70,6 +71,21 @@ export default function EntryGate({ onReady }: EntryGateProps) {
         <p className="mt-4 text-base leading-normal text-muted">
           Meet someone new across the globe. Start with a hello.
         </p>
+
+        <label htmlFor="conversation-status" className="mt-5 block text-sm font-medium">
+          Your conversation starter <span className="font-normal text-muted">(optional)</span>
+        </label>
+        <input
+          id="conversation-status"
+          type="text"
+          maxLength={60}
+          disabled={isEntering}
+          value={conversationStatus}
+          onChange={(event) => setConversationStatus(event.target.value)}
+          placeholder="Ask me about cats! 🐈"
+          className="mt-2 w-full rounded-control border border-current/20 bg-surface-muted px-3 py-3 text-base text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        />
+        <p className="mt-1 text-right text-xs text-muted">{conversationStatus.length}/60</p>
 
         <button
           onClick={enter}
