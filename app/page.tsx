@@ -48,6 +48,7 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [myStatus, setMyStatus] = useState("")
   const [myLocation, setMyLocation] = useState<MapLocation | null>(null)
 
   const [conn, _setConn] = useState<Conn>({ kind: "idle" })
@@ -547,6 +548,7 @@ export default function Home() {
   async function handleReady(lat: number, lng: number, status: string) {
     const { id, location } = await join(lat, lng, status)
     setMyLocation(location)
+    setMyStatus(status.trim())
     setSessionId(id)
     setPhase("live")
   }
@@ -570,6 +572,7 @@ export default function Home() {
       <WorldMap
         peers={peers}
         me={myLocation}
+        meStatus={myStatus}
         onPeerClick={requestConnection}
         interactive={hasJoined}
         conversationOpen={inChat}
