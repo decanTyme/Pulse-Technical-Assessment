@@ -1,79 +1,65 @@
 # Assessment notes
 
-## Delivery priorities
+## Delivery priorities and AI-assisted work
 
-I set deployment readiness as the first milestone: reliable core journeys, prioritized API security fixes, and production/deployment verification. I sequenced visual redesign and additional features after that baseline to concentrate the available time on functionality and safe release.
+I set a deploy-ready baseline as the first milestone: working core journeys, prioritized API security fixes, and production/deployment verification. The next priority after the browser baseline is the API security review. Visual redesign and an additional feature remain part of the assessment, sequenced after that milestone.
+
+I used Codex for repository tracing, documentation research, implementation drafts, and regression tests. I asked for research findings before implementing unfamiliar pieces and for file references and explanations when reviewing changes. I challenged proposals that added more infrastructure or test scope than the assessment needed. Related fixes and regression coverage were kept together for review; the milestones determined the order of work.
 
 ## Phase 1: Make it run
 
-### Local setup
+### Establishing the local baseline
 
-1. Cloned the starter repository and retained its existing Git history.
-2. Installed the starter dependencies and configured a local `.env` from `.env.example` with `DATABASE_URL` and `NEXT_PUBLIC_MAPBOX_TOKEN`. Credential values remain outside Git.
-3. Created a Neon PostgreSQL database in AWS Asia Pacific (Singapore), `aws-ap-southeast-1`.
+1. Cloned the starter and retained its Git history.
+2. Installed dependencies and configured an ignored `.env` from `.env.example` with `DATABASE_URL` and `NEXT_PUBLIC_MAPBOX_TOKEN`.
+3. Created a Neon PostgreSQL database in AWS Singapore (`aws-ap-southeast-1`).
 4. Ran `npx prisma db push` to synchronize the coordination schema.
-5. Ran `npx prisma generate` to create the database client required by the application.
-6. Started the application with `npm run dev`.
+5. Ran `npx prisma generate` to create the client.
+6. Started the app with `npm run dev`.
 
-### Setup diagnosis and verification
+The first API calls failed with `Cannot find module '.prisma/client/default'`; TypeScript reported `Module '"@prisma/client"' has no exported member 'PrismaClient'.` The starter [README](README.md#local-setup) omitted `npx prisma generate`, which Prisma 7 no longer runs automatically after `db push`. That left an onboarding gap: the database was synchronized, but the schema-specific client code and TypeScript types were missing. Running generation resolved both errors. The production build already includes this step; local development needs it explicitly. [Prisma 7 CLI behavior](https://docs.prisma.io/docs/cli/v7/db/push). A working globe was the starting point for two-participant testing.
 
-- API routes initially failed with `Cannot find module '.prisma/client/default'`, and TypeScript reported that `@prisma/client` had no `PrismaClient` export. Prisma 7 no longer generates the client automatically during `db push`; explicit generation resolved the missing-client blocker. The existing production build script already includes generation. [Prisma CLI reference](https://www.prisma.io/docs/orm/v7/reference/prisma-cli-reference#db-push)
-- After client generation, the globe loads and responds to interaction, and polling appears to run locally. The development log shows `GET /` returning HTTP 200.
-- Local development observations with the Singapore database: app entry completes in under one second and `/api/signal` requests complete in under 100 ms. No controlled benchmark has been run.
-- Local startup alone does not establish core functionality; browser verification results are recorded below.
+### Investigation and fixes
 
-### Development tooling
+- **Abandoned dots:** browser checks showed that an abandoned participant remained visible while another kept polling. Tracing [polling](app/api/poll/route.ts) showed that every session's heartbeat was refreshed. The fix updates only the `lastSeen` timestamp for the session making the poll request, allowing abandoned sessions to expire. The regression test keeps one participant polling while the other stops, then checks that the abandoned participant's dot disappears.
+- **Chat and negotiation:** a browser test reached chat but failed to display a message on the recipient. The sender and receiver used different message discriminators. `PeerSession` in [lib/webrtc.ts](lib/webrtc.ts) now uses a consistent discriminator, and local echo follows a successful send on an open channel. Research also established that ICE candidates require a remote description: incoming signals are now ordered, and early candidates wait for that prerequisite. This addresses an application ordering defect; it does not diagnose every ICE failure. [WebRTC candidate prerequisites](https://w3c.github.io/webrtc-pc/#dom-peerconnection-addicecandidate).
+- **End and reconnect:** traces showed a departed dot disappearing while the other chat stayed open, and a replacement request being declined while cleanup was still in flight. The investigation covered both browser state and server reservations. [Signaling](app/api/signal/route.ts) now updates `busy` flags and stores the matching `accept` or `end` signal in one database transaction. Handling an `end` signal removes obsolete signaling messages between the two participants; handling `decline` leaves reservations for unrelated active conversations unchanged. `Home` in [app/page.tsx](app/page.tsx) orders outgoing writes and waits for successful cleanup before another attempt. Channel closure or a peer disappearing from a successful poll ends the surviving chat. Using the **End** button cleans up server state before sending a hangup message and waiting up to three seconds for acknowledgement. This avoids duplicate cleanup during normal hangup that could erase a later connection request.
+- **Stalled or failed coordination:** slow signaling and failed writes made connection feedback unreliable. [The API client](lib/api.ts) now rejects unsuccessful HTTP responses and stops waiting after 15 seconds. [The database client](lib/prisma.ts) bounds connection/query waits to five seconds and makes Prisma's transaction limits explicit. I kept these as operation limits: multiple queries can exceed five seconds, and cancelling client waiting does not prove that a server write or SQL was cancelled. [node-postgres options](https://node-postgres.com/apis/client), [Prisma transaction options](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions#interactive-transactions).
+- **Request validation:** I asked for research on Next.js route-validation wrappers before choosing direct Zod 4 schemas. Zod was already installed, and route-owned schemas kept the validation and responses easy to follow. A shared [JSON reader](lib/request.ts) was justified by duplicate parsing/error handling in `/api/join` and `/api/signal`. The refactor preserves existing input limits and returns fixed HTTP 400 messages without echoing submitted content. Authorization and deeper payload hardening remain security-review work.
 
-- Configured Prettier with two-space indentation and no semicolons for consistent formatting.
+### Choosing the testing scope
 
-### Functional fixes
+I asked for browser journeys derived from [the requirements](docs/requirements.md): entry/exploration, connection consent, bidirectional messages, video, end/reconnect, and departure/fresh sessions. Playwright runs a fresh production build against an isolated schema-only test database, with actual API routes, Prisma/PostgreSQL, and native WebRTC.
 
-- Set 5-second `pg` connection-acquisition and query-response limits for short coordination operations. Made Prisma's existing interactive transaction limits explicit: 2 seconds to acquire a transaction and 5 seconds to run it. These are per-operation limits; a route with several queries can take longer. The query-response limit bounds client waiting and does not guarantee cancellation of SQL already running. [node-postgres configuration](https://node-postgres.com/apis/client), [Prisma 7 transaction options](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions#interactive-transactions)
-- Chat sender and receiver now use the same message discriminator, and the UI adds a local message only when the open data channel accepts the send.
-- Incoming WebRTC signals are processed in arrival order, and early ICE candidates are applied after the remote description is installed. Previously, early candidates could be silently lost, including when an offer and ICE arrived in one poll. Closing a session skips queued incoming work. [WebRTC candidate prerequisites](https://w3c.github.io/webrtc-pc/#dom-peerconnection-addicecandidate)
-- Remote data-channel closure and a connected peer disappearing from a successful poll now end the local chat and send end coordination to release the surviving reservation. Closed sessions and old peer callbacks cannot reopen the chat. [WebRTC data-channel closure](https://w3c.github.io/webrtc-pc/#event-datachannel-close)
-- Outgoing coordination writes are ordered. Cancel/end waits for an in-flight write, and a new request or acceptance waits for successful reservation cleanup. Failed cleanup stays pending; a new attempt retries cleanup before writing another request. Failed request/accept writes now end the affected attempt. Failures delivering WebRTC signals or applying a received description use the same cleanup path.
-- Signaling checks HTTP success and aborts a stalled client fetch after 15 seconds. Aborting the fetch does not prove that a server write was cancelled. [Fetch error and cancellation behavior](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
-- Normal End releases the server reservation before closing the transport. A small data-channel hangup/acknowledgement exchange prevents the recipient from echoing a second cleanup that could erase a new request. The acknowledgement wait falls back to closing after 3 seconds; the recipient consumes the server's end signal through polling. Abrupt departure keeps the channel-close/poll fallback. Buffered messages can be discarded during closure, so the normal path waits for acknowledgement rather than assuming a final message was delivered. [Data-channel closure behavior](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/close)
-- Polling now refreshes only the caller's heartbeat. Previously, one active participant kept abandoned dots alive by refreshing every session.
-- Accept/end coordination updates both busy flags and writes its signal in one transaction. End removes older signals between the pair; decline preserves an unrelated active reservation.
-- Join and signal request validation use Zod 4's `JoinBodySchema` and `SignalBodySchema`, removing manual request casts. Join preserves the 8–64 UTF-16-unit ID limit and requires finite numeric coordinates within latitude ±90 and longitude ±180. Signal preserves its 65,536 UTF-16-unit payload limit and null normalization. Fixed HTTP 400 errors keep submitted content out of responses. Both routes share a small JSON-reading helper and own their validation and responses.
+The initial failing journeys established a behavioral baseline and gave the agent concrete outcomes to work toward. They also provided regression checks for subsequent fixes. I then used focused tests to guide and verify individual changes.
 
-### Focused regression testing
+I challenged tests tied to private page state and exact operation traces. Page journeys now assert browser-visible outcomes; focused route/API/peer-session regressions use controlled external dependencies where failures can be isolated. Node's built-in runner executes the TypeScript tests without adding another test framework.
 
-- Added `npm test` using Node's built-in runner, with no additional testing dependency. Tests and helpers use `.mts` TypeScript modules, run directly on Node 24.12+, and are checked by the existing strict TypeScript project. The existing compiler transforms application TypeScript for the harness. All **29 checks pass**. Tests execute join, polling, and signaling handlers with controlled database boundaries, including request validation, reservation rollback, and cleanup. JSON-reading checks use native Requests; join and signal validation use real Zod. Join tests replace the privacy-offset calculation to verify that only returned offset coordinates enter the database write. Peer-session checks verify chat message compatibility, send readiness, incoming description/candidate ordering, channel-close handling, and bounded hangup acknowledgement with controlled WebRTC boundaries. API checks cover HTTP errors and fetch cancellation. These checks do not prove real database transactions, offset geometry, native ICE, or media transport. See [test scope](tests/unit/README.md).
-- Deferred additional coordination failure/race browser scenarios while validating the core business journeys. Their earlier results remain diagnostic evidence; the core suite retains consent, chat/video, disconnect/reconnect, presence and privacy coverage.
-- Separate local probes using the real Prisma/pg client timed out after approximately 5 seconds when a TCP peer withheld the connection handshake or query response. These probes used a local simulated peer, with no Neon connection; live database outage and cold-start behavior remain unverified.
+As additional failure/race scenarios grew, I deferred them and scoped the automated browser baseline to Chromium after repeated Firefox connection-readiness failures. This reserved time for security and release verification. The open acceptance-recovery defect remains documented below. One retry helps gather evidence, but a test passing only on retry still fails the run.
 
-### Automated browser testing
+Recorded validation: **29 Node regression checks passed**, the production build succeeded, and **all 18 Chromium core journeys passed on their first attempts**. These counts describe the checks actually run. See [focused test boundaries](tests/unit/README.md) and [browser coverage](tests/e2e/README.md).
 
-- The latest full run passed all **18 Chromium core scenarios on their first attempts** against a fresh production build. It covered entry, map/presence/privacy, connection consent, bidirectional chat, video consent and return to chat, End/reconnect, and connected-tab departure. The same run also included Firefox, whose nine connection-dependent scenarios failed initial data-channel readiness on both attempts. Cross-network and deployment readiness remain separate checks.
-- I scoped automated browser coverage to Chromium for this assessment to establish a bounded core baseline and prioritize security and release verification. Firefox testing is deferred after repeated connection-readiness failures; cross-browser compatibility is not claimed.
-- A browser trace reproduced a tab-close bug: the departed dot vanished, but the surviving chat stayed connected. Another trace reproduced a new request being auto-declined while both participants' end writes were still in flight. An earlier focused Chromium run passed delayed End/reconnect, cancellation of an in-flight request, and tab-close followed by a new chat. Each scenario requires successful message delivery after reconnecting. Normal End also asserts that the other browser sends no mirrored end write. Those three Firefox checks failed at data-channel readiness.
-- An earlier focused production run covered live failed request, failed acceptance, and failed-cleanup retry/cancellation: **2 Chromium passes, 1 Chromium failure; 3 Firefox failures**. Failed acceptance prevents the replacement request from opening an incoming prompt in both browsers. The real write commits before an injected error response; cleanup removes acceptance before the initiator polls it, and the initiator remains requesting despite receiving end. Firefox's other two cases passed coordination recovery but stopped at data-channel readiness, leaving message delivery unverified. These are historical focused checks; the additional failure scenarios are now deferred. Deployment readiness is not established.
+### Database and tooling decisions
 
-- Added Playwright 1.63.0 with one configuration and a Chromium project. `npm run test:e2e` runs 18 scenarios against a production build, grouped into entry, presence/map, connections/chat, and video specs. It reads the isolated test database's `DATABASE_URL` only from ignored `.env.test.local`; Zod 4 validates the URL, and a guard rejects the known development database.
-- All three Chromium entry checks pass locally; see [test setup and limitations](tests/e2e/README.md).
-- The browser baseline before these functional fixes produced **16 passes and 20 failures** across all 36 checks. Eighteen failures stopped at the connection-readiness prerequisite, leaving their later assertions unverified; two reproduced stale-dot persistence. That historical run predates the current Chromium baseline. Per-session cleanup left the test database empty.
-- Derived six critical user journeys from [the business requirements](docs/requirements.md): enter/explore, request consent, exchange messages, video, end/reconnect, and leave/start fresh. Added checks for ignored requests, a third participant requesting a busy peer, new session IDs/privacy offsets, map gestures, video decline, media-permission failures, and closing a connected tab. Video scenarios exercise either initiator and the other participant ending the call. See [coverage and boundaries](tests/e2e/README.md).
-- The two-participant scenarios use real API routes, Prisma/PostgreSQL, and WebRTC, with synthetic locations and media devices. Entry errors are injected to verify the UI response. Mapbox's SDK uses a local blank style, so real tiles/token validity, native permission dialogs, hardware permissions, cross-network connectivity, and deployment remain separate checks.
-- Tests build production code in the normal `.next` directory and start a fresh server at `http://localhost:3000`; stop the development server before running them. One worker, explicit per-session cleanup, and ignored artifacts keep runs isolated. One automatic retry is enabled; tests that pass only on retry still fail the run. See [test setup and debugging](tests/e2e/README.md).
+I retained the starter's Prisma ORM and `pg` adapter to keep setup changes focused. Singapore places the database near local development/testing. Planned Vercel functions in Singapore (`sin1`) keep the deployed API close to the database, particularly relevant to polling's sequential queries. [Vercel region guidance](https://vercel.com/docs/functions/configuring-functions/region), [region codes](https://vercel.com/docs/regions).
 
-### Database and deployment decisions
+The pairing fits Neon Free and Vercel Hobby within their usage limits; Hobby supports one selected function region. [Neon free-tier regions](https://neon.com/blog/making-pricing-more-predictable), [Vercel region limits](https://vercel.com/docs/functions/configuring-functions/region#limits).
 
-- Selected Neon Singapore (`aws-ap-southeast-1`) to keep the database near the development and testing environment and limit network delay during local debugging. [Neon regions](https://neon.com/docs/introduction/regions)
-- Planned Vercel functions in Singapore (`sin1`) to keep the deployed API close to the database. This is particularly relevant to polling, which performs several sequential database operations. [Vercel function regions](https://vercel.com/docs/functions/configuring-functions/region), [Vercel regions](https://vercel.com/docs/regions)
-- This pairing is available on Neon Free and Vercel Hobby within their usage limits. Hobby supports one chosen function region. [Neon free-tier availability](https://neon.com/blog/making-pricing-more-predictable), [Vercel region configuration](https://vercel.com/docs/project-configuration/vercel-json#regions)
-- Retained the starter's Prisma ORM and `pg` adapter to keep setup changes focused.
-- Vercel project creation, deployment, environment-variable configuration, and the actual deployed function region remain pending.
+Local entry completes in under one second and signaling requests in under 100 ms. These are development observations without a controlled benchmark. Prettier uses two-space indentation and no semicolons.
+
+### Remaining limitations
+
+- Automated coverage establishes the Chromium baseline. Synthetic locations/media and intercepted map downloads leave real Mapbox configuration, hardware permissions, cross-browser and cross-network behavior for separate verification.
+- **Open recovery defect:** when the server stores an `accept` signal but its HTTP response fails, cleanup can remove that signal before the requester polls. The requester can remain in the `requesting` state after receiving an `end` signal, blocking a replacement request. Deferring its fault-injection test does not resolve it.
+- Vercel project setup, environment configuration, deployed function region, and an HTTPS two-participant smoke test remain pending. The local baseline alone does not establish deployment readiness.
 
 ## Phase 2: Make it good
 
-Pending. No visual direction has been selected or implemented.
+Pending. No visual redesign has been selected or implemented.
 
 ## Phase 3: Make it secure
 
-Pending. No security changes have been implemented.
+Input validation is implemented for `/api/join` and `/api/signal`. The broader API security review, risk prioritization, and release fixes remain pending.
 
 ## Phase 4: Make it better
 

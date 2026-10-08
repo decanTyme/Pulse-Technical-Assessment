@@ -1,37 +1,54 @@
 # Focused regression tests
 
-Use Node 24.12 or newer and run `npm test` from the repository root.
-Node's built-in test runner executes the `.mts` TypeScript tests and helpers
-directly, without an additional runner dependency. `.mts` explicitly selects
-ES modules without changing the application's package module type.
+These tests check route and peer-session behavior with controlled dependencies.
+They run without a database, browser, or credentials.
 
-Node strips types at runtime; it does not check them. Run `npx tsc --noEmit` to
-check the application and all tests with the existing strict configuration.
-Relative imports include their `.mts`/`.ts` extensions; `allowImportingTsExtensions`
-permits those imports in the existing no-emit project.
+## Run
 
-The source helper still uses the existing TypeScript compiler to transform
-application TS/TSX and supplies controlled dependency fakes in a VM. Native
-Node type stripping does not process JSX or resolve Next.js path aliases.
+Use Node 24.12 or newer. From the repository root:
 
-Tests execute join, polling, and signaling handlers with controlled database boundaries, including request validation, reservation rollback, and cleanup. Join and signal tests use the real Zod implementation. Join tests replace the privacy-offset function to verify that its returned coordinates are used in both upsert branches; they do not test the offset geometry. JSON-reading tests exercise native Requests with valid, malformed, empty, and consumed bodies.
+```sh
+npm test
+npx tsc --noEmit
+```
 
-Peer-session tests relay a sent message into another session's real receive handler and verify that unavailable or closed channels report a failed send. Incoming signaling checks cover ICE arriving before its offer, an offer and ICE arriving in one batch, skipping queued work after close, and continuing after a rejected signal. Closure checks verify remote channel-close notification, quiet local teardown, and ignoring a delayed channel-open event after closing. The WebRTC helper models asynchronous description installation and channel events, and rejects candidates without a remote description; it does not establish a native peer connection.
+Node's built-in runner executes the `.mts` tests directly. The extension selects
+ES modules without changing the application's package module type. Node strips
+types but does not check them; the second command checks application and test
+types with the existing strict configuration.
 
-Hangup checks relay the end/acknowledgement control messages, verify that normal
-closure does not echo cleanup, and cover external closure or a missing
-acknowledgement. Controlled timers verify the 3-second bound without real waiting.
-API checks use native Responses and controlled fetch/timer boundaries to verify
-HTTP failure handling and the 15-second signaling wait.
+## Coverage
 
-Core page journeys are covered in Playwright through browser interactions with
-the real API/database. Additional cancellation and failed-request/acceptance
-recovery scenarios are deferred while validating the core baseline. Peer-session checks assert delivered messages,
-processed candidates, and closure callbacks without matching an exact trace of
-browser API calls. The WebRTC fake enforces the remote-description prerequisite.
+| Tests                                          | Behavior                                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [request.test.mts](request.test.mts)           | JSON parsing with native Requests, including malformed, empty, and consumed bodies.                          |
+| [join.test.mts](join.test.mts)                 | Zod input validation and persistence of offset coordinates in both upsert branches.                          |
+| [presence.test.mts](presence.test.mts)         | Caller-only heartbeat refresh and abandoned-session cleanup.                                                 |
+| [signaling.test.mts](signaling.test.mts)       | Zod validation, reservation rollback, accept/end cleanup, and protection of unrelated active reservations.   |
+| [api.test.mts](api.test.mts)                   | HTTP failure handling, successful-write completion, and bounded signaling waits.                             |
+| [peer-session.test.mts](peer-session.test.mts) | Chat delivery/send failure, incoming description/ICE ordering, closure, and hangup acknowledgement/timeouts. |
 
-Small fakes replace database/network/browser boundaries. These checks do not
-prove real Prisma/Postgres transactions, native browser ICE, React scheduling,
-or media transport. The Playwright suite covers the real API/database/browser journeys.
+## Boundaries and limitations
+
+[The source helper](../helpers/source.mts) uses the existing TypeScript compiler
+to load application modules in a VM with controlled dependencies. Native Node
+type stripping does not handle JSX or Next.js path aliases. Relative test imports
+include their `.mts`/`.ts` extensions, permitted by the existing no-emit
+TypeScript configuration.
+
+Route tests use a database fake and real Zod. Join tests substitute a
+deterministic privacy offset to verify that the route persists the returned
+coordinates rather than raw input; geometry is covered in
+[the browser suite](../e2e/README.md).
+
+[The WebRTC fake](../helpers/webrtc.mts) models asynchronous description
+installation and channel events, enforcing the remote-description prerequisite
+for ICE candidates. Tests assert message delivery, candidate processing, and
+closure outcomes. Controlled timers cover signaling and hangup limits without
+real waiting.
+
+These checks do not establish real Prisma/PostgreSQL transaction behavior,
+React scheduling, native ICE, or media transport. The browser suite exercises
+core journeys with the real API, database, and peer connections.
 
 Reference: [Node's native TypeScript support](https://nodejs.org/download/release/v24.15.0/docs/api/typescript.html).
