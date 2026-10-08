@@ -72,6 +72,7 @@ test("public dot IDs cannot authorize mailbox access, impersonation or departure
       "id",
       "lat",
       "lng",
+      "status",
     ])
   } finally {
     for (const credentials of sessions) {

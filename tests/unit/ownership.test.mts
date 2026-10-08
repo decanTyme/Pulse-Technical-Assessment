@@ -107,7 +107,9 @@ test("the owner can consume its mailbox without exposing any credential", async 
   assert.equal(response.headers.get("cache-control"), "no-store")
 
   const data = await response.json()
-  assert.deepEqual(data.peers, [{ id: "bob", lat: 1, lng: 2, busy: false }])
+  assert.deepEqual(data.peers, [
+    { id: "bob", lat: 1, lng: 2, busy: false, status: null },
+  ])
   assert.equal(data.signals[0].type, "request")
   assert.equal(db.state.signal.length, 0)
 })
