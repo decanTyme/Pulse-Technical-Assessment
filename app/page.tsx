@@ -556,7 +556,13 @@ export default function Home() {
 
   return (
     <main
-      className="pulse-shell"
+      className="
+        pulse-shell group/shell fixed inset-0 overflow-hidden bg-background
+        [--conversation-width:min(400px,calc(100vw-3rem))]
+        [--conversation-height:min(70dvh,calc(100dvh-8rem))]
+        [--conversation-bottom:max(1rem,env(safe-area-inset-bottom))]
+        max-md:data-[video=true]:[--conversation-height:min(80dvh,calc(100dvh-8rem))]
+      "
       data-conversation={inChat}
       data-video={video === "active"}
     >
@@ -567,11 +573,22 @@ export default function Home() {
         interactive={hasJoined}
         canConnect={canDiscover && presenceStatus === "ready"}
       >
-        <header className="pulse-header">
-          <h1 className="type-wordmark pulse-brand">Pulse</h1>
-          <div className="pulse-header-controls">
+        <header
+          className="
+            pointer-events-none absolute top-[max(1.5rem,env(safe-area-inset-top))] right-4 left-4 z-20
+            flex flex-wrap items-center justify-between gap-2 md:right-6 md:left-6 md:gap-4
+            md:group-data-[conversation=true]/shell:right-[calc(var(--conversation-width)+3.5rem)]
+          "
+        >
+          <h1 className="font-heading font-semibold tracking-[-0.035em] [font-variation-settings:'SOFT'_50,'WONK'_0] text-[2rem] leading-[1.1]">
+            Pulse
+          </h1>
+          <div className="pointer-events-auto flex items-center gap-4">
             {hasJoined && (
-              <p role="status" className="pulse-presence-count type-status">
+              <p
+                role="status"
+                className="text-sm font-medium leading-snug rounded-control bg-surface px-3 py-2.5 shadow-[0_2px_12px_var(--shadow-warm)] md:px-4"
+              >
                 {presenceStatus === "ready" ? (
                   <>
                     <span className="block text-xs font-normal text-muted">
@@ -595,10 +612,17 @@ export default function Home() {
 
       {canDiscover && (
         <section
-          className="pulse-discovery"
+          className="
+            pointer-events-none absolute top-24 left-4 z-20 w-[min(300px,calc(100%-2rem))] rounded-panel
+            bg-surface p-6 shadow-[0_4px_24px_var(--shadow-warm)] md:left-6
+            md:w-[min(300px,calc(100%-3rem))]
+          "
           aria-labelledby="discovery-heading"
         >
-          <h2 id="discovery-heading" className="type-card-heading">
+          <h2
+            id="discovery-heading"
+            className="font-heading font-semibold tracking-[-0.035em] [font-variation-settings:'SOFT'_50,'WONK'_0] text-2xl leading-tight"
+          >
             {presenceStatus === "degraded"
               ? "Live updates paused"
               : presenceStatus === "loading"
@@ -620,22 +644,45 @@ export default function Home() {
       )}
 
       {notice && (
-        <p role="status" className="pulse-notice type-status">
+        <p
+          role="status"
+          className="
+            text-sm font-medium leading-snug pointer-events-none absolute top-24 left-4 z-40
+            max-w-[min(360px,calc(100%-2rem))] rounded-control bg-surface p-4
+            shadow-[0_4px_24px_var(--shadow-warm)] md:left-6 md:max-w-[min(360px,calc(100%-3rem))]
+          "
+        >
           {notice}
         </p>
       )}
 
       {conn.kind === "requesting" && (
-        <section className="pulse-request" aria-labelledby="request-heading">
-          <h2 id="request-heading" role="status" className="type-card-heading">
+        <section
+          className="
+            absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 z-30
+            w-[min(360px,calc(100%-2rem))] -translate-x-1/2 rounded-panel bg-surface p-6
+            shadow-[0_8px_32px_var(--shadow-warm)]
+          "
+          aria-labelledby="request-heading"
+        >
+          <h2
+            id="request-heading"
+            role="status"
+            className="font-heading font-semibold tracking-[-0.035em] [font-variation-settings:'SOFT'_50,'WONK'_0] text-2xl leading-tight"
+          >
             Waiting for a response…
           </h2>
-          <p className="type-status mt-3 text-muted">
+          <p className="text-sm font-medium leading-snug mt-3 text-muted">
             You can cancel while you wait.
           </p>
           <button
             onClick={cancelRequest}
-            className="pulse-button pulse-button-secondary mt-4"
+            className="
+              inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border-0
+              px-5 py-2.5 text-[15px] font-semibold leading-snug transition-[background-color,box-shadow]
+              duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55
+              bg-surface-muted text-foreground mt-4
+            "
           >
             Cancel
           </button>
@@ -654,7 +701,14 @@ export default function Home() {
       )}
 
       {inChat && (
-        <div className="pulse-conversation">
+        <div
+          className="
+            absolute inset-x-4 bottom-(--conversation-bottom) z-20 flex h-(--conversation-height) min-h-0
+            flex-col overflow-hidden rounded-panel bg-surface shadow-[0_8px_32px_var(--shadow-warm)]
+            md:top-[max(1.5rem,env(safe-area-inset-top))] md:right-6 md:bottom-6 md:left-auto md:h-auto
+            md:w-(--conversation-width)
+          "
+        >
           {video === "active" && (
             <VideoPanel
               localStream={localStream}
@@ -663,7 +717,10 @@ export default function Home() {
             />
           )}
           {video === "requesting" && (
-            <p role="status" className="pulse-video-notice type-status">
+            <p
+              role="status"
+              className="text-sm font-medium leading-snug shrink-0 bg-surface-muted px-4 py-3"
+            >
               Waiting for stranger to accept video…
             </p>
           )}

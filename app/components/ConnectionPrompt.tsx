@@ -33,7 +33,12 @@ export default function ConnectionPrompt({
   return (
     <dialog
       ref={dialogRef}
-      className="pulse-prompt"
+      className="
+        fixed inset-0 top-auto bottom-[max(1rem,env(safe-area-inset-bottom))] mx-auto my-0
+        max-h-[calc(100dvh-3rem)] w-[min(380px,calc(100%-2rem))] overflow-y-auto rounded-panel border-0
+        bg-surface p-6 text-foreground shadow-[0_8px_32px_var(--shadow-warm)] backdrop:bg-background/55
+        md:top-0 md:bottom-0 md:my-auto
+      "
       aria-labelledby={titleId}
       aria-describedby={subtitle ? subtitleId : undefined}
       onCancel={(event) => {
@@ -41,24 +46,38 @@ export default function ConnectionPrompt({
         onDecline()
       }}
     >
-      <h2 id={titleId} className="type-card-heading">
+      <h2
+        id={titleId}
+        className="font-heading font-semibold tracking-[-0.035em] [font-variation-settings:'SOFT'_50,'WONK'_0] text-2xl leading-tight"
+      >
         {title}
       </h2>
       {subtitle && (
-        <p id={subtitleId} className="type-body mt-3 text-muted">
+        <p id={subtitleId} className="mt-3 text-base leading-normal text-muted">
           {subtitle}
         </p>
       )}
-      <div className="pulse-prompt-actions">
+      <div className="mt-6 flex gap-3">
         <button
           onClick={onDecline}
-          className="pulse-button pulse-button-secondary"
+          className="
+            inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border-0
+            px-5 py-2.5 text-[15px] font-semibold leading-snug transition-[background-color,box-shadow]
+            duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55
+            bg-surface-muted text-foreground flex-1
+          "
         >
           {declineLabel}
         </button>
         <button
           onClick={onAccept}
-          className="pulse-button pulse-button-primary"
+          className="
+            inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border-0
+            px-5 py-2.5 text-[15px] font-semibold leading-snug transition-[background-color,box-shadow]
+            duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55
+            bg-primary text-primary-foreground shadow-[0_4px_12px_var(--shadow-warm)]
+            enabled:hover:bg-primary-hover enabled:hover:shadow-[0_5px_16px_var(--shadow-warm)] flex-1
+          "
         >
           {acceptLabel}
         </button>

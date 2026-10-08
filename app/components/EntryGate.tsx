@@ -47,23 +47,40 @@ export default function EntryGate({ onReady }: EntryGateProps) {
   }
 
   return (
-    <div className="pulse-entry-overlay">
+    <div
+      className="
+        pointer-events-none absolute inset-0 z-20 flex items-end justify-center px-4 pt-6
+        pb-[max(4.5rem,calc(env(safe-area-inset-bottom)+2.5rem))] sm:px-6
+      "
+    >
       <section
         aria-labelledby="welcome-heading"
         aria-busy={isEntering}
-        className="pulse-welcome"
+        className="
+          pointer-events-auto max-h-[calc(100dvh-9rem)] w-full max-w-[420px] overflow-y-auto
+          overscroll-contain rounded-panel bg-surface p-6 shadow-[0_12px_48px_var(--shadow-warm)] sm:p-8
+        "
       >
-        <h2 id="welcome-heading" className="type-hero">
+        <h2
+          id="welcome-heading"
+          className="font-heading font-semibold tracking-[-0.035em] [font-variation-settings:'SOFT'_50,'WONK'_0] text-[clamp(2rem,3.5vw,2.75rem)] leading-[1.08]"
+        >
           The world feels closer together.
         </h2>
-        <p className="type-body mt-4 text-muted">
+        <p className="mt-4 text-base leading-normal text-muted">
           Meet someone new across the globe. Start with a hello.
         </p>
 
         <button
           onClick={enter}
           disabled={isEntering}
-          className="pulse-button pulse-button-primary mt-6 w-full"
+          className="
+            inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border-0
+            px-5 py-2.5 text-[15px] font-semibold leading-snug transition-[background-color,box-shadow]
+            duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55
+            bg-primary text-primary-foreground shadow-[0_4px_12px_var(--shadow-warm)]
+            enabled:hover:bg-primary-hover enabled:hover:shadow-[0_5px_16px_var(--shadow-warm)] mt-6 w-full
+          "
         >
           {status === "locating"
             ? "Finding your location…"
@@ -73,7 +90,10 @@ export default function EntryGate({ onReady }: EntryGateProps) {
         </button>
 
         {isEntering && (
-          <p role="status" className="type-status mt-3 text-muted">
+          <p
+            role="status"
+            className="text-sm font-medium leading-snug mt-3 text-muted"
+          >
             {status === "locating"
               ? "Allow location access to place your dot."
               : "Getting your place on the globe ready."}
@@ -81,12 +101,15 @@ export default function EntryGate({ onReady }: EntryGateProps) {
         )}
 
         {status === "error" && (
-          <p role="alert" className="type-status mt-3 text-danger">
+          <p
+            role="alert"
+            className="text-sm font-medium leading-snug mt-3 text-danger"
+          >
             {error}
           </p>
         )}
 
-        <p className="mt-5 text-sm leading-relaxed text-muted">
+        <p className="mt-6 text-sm leading-relaxed text-muted">
           No sign-up. Your dot is offset by about 1–3&nbsp;km. Chat and video
           travel directly between participants.
         </p>

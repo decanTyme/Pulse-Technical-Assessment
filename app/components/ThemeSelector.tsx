@@ -69,7 +69,11 @@ export default function ThemeSelector() {
   return (
     <button
       type="button"
-      className="pulse-theme-toggle"
+      className="
+        grid size-11 cursor-pointer place-items-center rounded-control border-0 bg-transparent p-2.5
+        text-foreground hover:bg-foreground/10 hover:text-primary focus-visible:bg-foreground/10
+        focus-visible:text-primary
+      "
       aria-label={label}
       title={label}
       onClick={cycleThemePreference}

@@ -148,11 +148,17 @@ export default function WorldMap({
       if (cancelled) return
       if (!meMarkerRef.current) {
         const element = document.createElement("div")
-        element.className = "pulse-me"
+        element.className =
+          "pointer-events-none relative grid size-11 place-items-center"
         element.title = "You are here"
         element.setAttribute("aria-label", "Your approximate location")
-        element.innerHTML =
-          '<span class="pulse-me-core"></span><span class="pulse-me-label">You</span>'
+        element.innerHTML = `
+          <span class="size-4 rounded-full border-2 border-surface bg-primary
+            shadow-[0_0_0_5px_var(--shadow-warm)]"></span>
+          <span class="absolute top-[calc(100%-0.5rem)] left-1/2 -translate-x-1/2
+            rounded-md bg-primary px-1.5 py-px text-[11px] font-semibold leading-normal
+            whitespace-nowrap text-primary-foreground">You</span>
+        `
         meMarkerRef.current = new mapboxgl.Marker({ element })
           .setLngLat([me.lng, me.lat])
           .addTo(map)
@@ -184,9 +190,17 @@ export default function WorldMap({
         if (!marker) {
           const element = document.createElement("button")
           element.type = "button"
-          element.className = "pulse-dot"
+          element.className =
+            "group/dot grid size-11 cursor-pointer place-items-center border-0 bg-transparent p-0 disabled:cursor-default"
           element.setAttribute("role", "button")
-          element.innerHTML = '<span class="pulse-dot-core"></span>'
+          // Mapbox positions the outer marker; hover only scales this inner dot.
+          element.innerHTML = `
+            <span class="size-4 rounded-full border-2 border-surface bg-accent-green
+              shadow-[0_2px_6px_rgb(0_0_0/18%)] transition-transform duration-150
+              motion-reduce:transition-none group-enabled/dot:group-hover/dot:scale-120
+              group-disabled/dot:opacity-50 group-data-[busy=true]/dot:border-accent-green
+              group-data-[busy=true]/dot:bg-surface-muted"></span>
+          `
           element.addEventListener("click", (event) => {
             event.stopPropagation()
             if (canConnectRef.current) onPeerClickRef.current(peer.id)
@@ -224,31 +238,60 @@ export default function WorldMap({
   }
 
   return (
-    <div className="pulse-world" data-entry={!interactive}>
+    <div
+      className="group/world absolute inset-0 bg-background"
+      data-entry={!interactive}
+    >
       <div
         ref={containerRef}
         inert={!interactive}
-        className="pulse-map-canvas h-full w-full"
+        className="absolute inset-0 size-full bg-background"
       />
 
       {children}
 
       {status === "loading" && (
-        <p role="status" className="pulse-map-feedback type-status">
+        <p
+          role="status"
+          className="
+            absolute z-15 max-w-[min(280px,calc(100%-3rem))] rounded-panel bg-surface p-4
+            shadow-[0_4px_24px_var(--shadow-warm)] group-data-[entry=true]/world:top-24
+            group-data-[entry=true]/world:right-6 group-data-[entry=true]/world:bottom-auto
+            group-data-[entry=true]/world:left-auto
+            bottom-[max(4rem,calc(env(safe-area-inset-bottom)+2.5rem))] left-6 text-sm font-medium
+            leading-snug
+          "
+        >
           Loading the globe…
         </p>
       )}
 
       {status === "error" && (
-        <div role="alert" className="pulse-map-feedback">
-          <p className="type-status">{"The map couldn't load."}</p>
+        <div
+          role="alert"
+          className="
+            absolute z-15 max-w-[min(280px,calc(100%-3rem))] rounded-panel bg-surface p-4
+            shadow-[0_4px_24px_var(--shadow-warm)] group-data-[entry=true]/world:top-24
+            group-data-[entry=true]/world:right-6 group-data-[entry=true]/world:bottom-auto
+            group-data-[entry=true]/world:left-auto
+            bottom-[max(4rem,calc(env(safe-area-inset-bottom)+2.5rem))] left-6
+          "
+        >
+          <p className="text-sm font-medium leading-snug">
+            {"The map couldn't load."}
+          </p>
           <p className="mt-1 text-sm text-muted">
             Check your connection and try again.
           </p>
           {TOKEN && (
             <button
               onClick={reloadMap}
-              className="pulse-button pulse-button-secondary mt-3"
+              className="
+                inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border-0
+                px-5 py-2.5 text-[15px] font-semibold leading-snug transition-[background-color,box-shadow]
+                duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55
+                bg-surface-muted text-foreground mt-3
+              "
             >
               Reload map
             </button>
