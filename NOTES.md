@@ -59,6 +59,7 @@ Pending. No visual redesign has been selected or implemented.
 
 ## Phase 3: Make it secure
 
+Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. The proposed security fixes remain pending.
 Input validation is implemented for `/api/join` and `/api/signal`. The broader API security review, risk prioritization, and release fixes remain pending.
 
 ## Phase 4: Make it better
