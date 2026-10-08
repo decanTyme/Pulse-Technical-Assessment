@@ -4,8 +4,8 @@ import { SESSION_TOKENS } from "./session.mts"
 
 type ConnectionFields =
   "connectionId" | "peerId" | "initiatorId" | "requestedAt"
-type CreatedPresence = Omit<Presence, ConnectionFields> &
-  Partial<Pick<Presence, ConnectionFields>>
+type CreatedPresence = Omit<Presence, ConnectionFields | "status"> &
+  Partial<Pick<Presence, ConnectionFields | "status">>
 type CreatedSignal = Pick<Signal, "fromId" | "toId" | "type"> &
   Partial<Pick<Signal, "payload" | "connectionId">>
 
@@ -38,6 +38,7 @@ export function database(ids = ["alice", "bob"]) {
       lat: 1,
       lng: 2,
       busy: false,
+      status: null,
       lastSeen: new Date(),
       connectionId: null,
       peerId: null,
@@ -102,6 +103,7 @@ export function database(ids = ["alice", "bob"]) {
           }
 
           const row = {
+            status: null,
             connectionId: null,
             peerId: null,
             initiatorId: null,

@@ -27,12 +27,12 @@ function getSessionToken(id: string): string {
   return session.token
 }
 
-export async function join(lat: number, lng: number): Promise<JoinedSession> {
+export async function join(lat: number, lng: number, status: string): Promise<JoinedSession> {
   try {
     const response = await fetch("/api/join", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat, lng }),
+      body: JSON.stringify({ lat, lng, status }),
     })
 
     if (!response.ok) {

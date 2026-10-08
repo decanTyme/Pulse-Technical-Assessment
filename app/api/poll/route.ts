@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
   const peers = await prisma.presence.findMany({
     where: { id: { not: id }, lastSeen: { gte: staleCutoff } },
-    select: { id: true, lat: true, lng: true, busy: true },
+    select: { id: true, lat: true, lng: true, busy: true, status: true },
   })
 
   // Drain only this mailbox atomically, including concurrent owner polls.
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
       lat: p.lat,
       lng: p.lng,
       busy: p.busy,
+      status: p.status,
     })),
     signals: inbox.flatMap((s) =>
       s.connectionId

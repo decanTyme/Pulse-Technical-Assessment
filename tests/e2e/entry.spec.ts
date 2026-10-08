@@ -55,6 +55,8 @@ test("keyboard entry shows a visible location alert and permits retry", async ({
     page.getByRole("button", { name: /^Color theme:/ }),
   ).toBeFocused()
   await page.keyboard.press("Tab")
+  await expect(page.getByRole("textbox", { name: /Your conversation starter/ })).toBeFocused()
+  await page.keyboard.press("Tab")
   await expect(enter).toBeFocused()
   await page.keyboard.press("Enter")
 
@@ -158,4 +160,14 @@ test("a failed map download keeps entry usable and allows a map reload", async (
     page.getByText("Loading the globe…", { exact: true }),
   ).toHaveCount(0)
   await expect(page.locator(".mapboxgl-canvas")).toBeVisible()
+})
+
+test("a conversation starter is visible above another person's dot", async ({ pair }) => {
+  await pair.alice.goto("/")
+  await pair.alice.getByRole("textbox", { name: /Your conversation starter/ }).fill("Ask me about cats!")
+  await pair.alice.getByRole("button", { name: "Enter Pulse", exact: true }).click()
+  await expect(pair.alice.getByTitle("You are here", { exact: true })).toBeVisible()
+  await pair.bob.goto("/")
+  await pair.bob.getByRole("button", { name: "Enter Pulse", exact: true }).click()
+  await expect(pair.bob.getByText("Ask me about cats!", { exact: true })).toBeVisible()
 })
