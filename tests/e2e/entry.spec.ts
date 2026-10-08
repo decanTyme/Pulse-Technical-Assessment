@@ -51,6 +51,10 @@ test("keyboard entry shows a visible location alert and permits retry", async ({
   const enter = page.getByRole("button", { name: "Enter Pulse", exact: true })
   await expect(enter).toBeEnabled()
   await page.keyboard.press("Tab")
+  await expect(
+    page.getByRole("combobox", { name: "Color theme" }),
+  ).toBeFocused()
+  await page.keyboard.press("Tab")
   await expect(enter).toBeFocused()
   await page.keyboard.press("Enter")
 

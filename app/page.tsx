@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import EntryGate from "./components/EntryGate"
+import ThemeSelector from "./components/ThemeSelector"
 import WorldMap from "./components/WorldMap"
 import ConnectionPrompt from "./components/ConnectionPrompt"
 import ChatPanel, { type ChatMessage } from "./components/ChatPanel"
@@ -565,22 +566,25 @@ export default function Home() {
 
       <header className="pulse-header">
         <h1 className="type-wordmark pulse-brand">Pulse</h1>
-        {hasJoined && (
-          <p role="status" className="pulse-presence-count type-status">
-            {presenceStatus === "ready" ? (
-              <>
-                <span className="block text-xs font-normal text-muted">
-                  Other people
-                </span>
-                <span>{peers.length} online</span>
-              </>
-            ) : presenceStatus === "degraded" ? (
-              "Live updates paused"
-            ) : (
-              "Finding people…"
-            )}
-          </p>
-        )}
+        <div className="pulse-header-controls">
+          {hasJoined && (
+            <p role="status" className="pulse-presence-count type-status">
+              {presenceStatus === "ready" ? (
+                <>
+                  <span className="block text-xs font-normal text-muted">
+                    Other people
+                  </span>
+                  <span>{peers.length} online</span>
+                </>
+              ) : presenceStatus === "degraded" ? (
+                "Live updates paused"
+              ) : (
+                "Finding people…"
+              )}
+            </p>
+          )}
+          <ThemeSelector />
+        </div>
       </header>
 
       {!hasJoined && <EntryGate onReady={handleReady} />}

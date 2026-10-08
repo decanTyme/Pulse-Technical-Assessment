@@ -57,7 +57,7 @@ Local entry completes in under one second and signaling requests in under 100 ms
 
 ### Color and typography foundation
 
-I chose a hopeful solarpunk direction: warm cream and terracotta for golden hour, forest green with amber for dusk. Fraunces carries expressive display text; DM Sans carries working UI. [The layout](app/layout.tsx) loads both through `next/font`, which downloads them at build time and serves them with the app. [Semantic tokens and type roles](app/globals.css) keep the palette and fonts adjustable in one place. The themes follow the system color preference in this first increment.
+I chose a hopeful solarpunk direction: warm cream and terracotta for golden hour, forest green with amber for dusk. Fraunces carries expressive display text; DM Sans carries working UI. [The layout](app/layout.tsx) loads both through `next/font`, which downloads them at build time and serves them with the app. [Semantic tokens and type roles](app/globals.css) keep the palette and fonts adjustable in one place. Appearance supports light, dark and system preferences.
 
 The [entry screen](app/components/EntryGate.tsx) is the first consumer, with modestly rounded controls, visible keyboard focus, 44 px minimum button height, and announced errors. Primary-button text contrast measures **4.74:1 in light** and **6.88:1 in dark**; body, muted, secondary and error color pairs also exceed 4.5:1. Reduced-motion rules disable the shared button transitions and existing dot pulse.
 
@@ -72,6 +72,12 @@ I kept one [Mapbox globe](app/components/WorldMap.tsx) mounted while the welcome
 The own dot and camera use the same server-randomized position that other participants receive. [Join](app/api/join/route.ts) returns its existing offset; [the client](lib/api.ts) validates it before installing the session. This needs no schema change. Entry privacy details distinguish peer-to-peer content from server coordination, disclose original location and peer-network metadata, and explain best-effort cleanup rather than promising immediate deletion. Independently bounded retention remains hardening work.
 
 Validation: all **44 Node checks** passed. Chromium verification combined **18 passing checks** in the broad run with **six focused pan/video checks**, all with retries disabled and fresh production builds. The pan assertion checks marker movement without assuming the old map's fixed pixel scale. New coverage verifies map reload and loading/empty/interrupted-update recovery; existing chat, consent, ownership, reconnect and video journeys remain covered. Separate real-Mapbox previews verified desktop/mobile layouts in both themes, keyboard focus, expanded privacy details and attribution visibility. The production build, TypeScript and scoped lint passed. Conversation/prompt layout and final UI verification are the next increments.
+
+### Choosing light, dark, or system appearance
+
+The header's [native theme selector](app/components/ThemeSelector.tsx) offers **System**, **Light**, and **Dark**, with System as the default. Explicit choices override device settings and persist locally as a theme preference. Returning to System follows subsequent device changes. A small script in [the layout](app/layout.tsx) applies the saved choice before paint; the interface and Mapbox read the same resolved theme, keeping their appearance consistent while retaining the globe instance. The native selector supplies standard keyboard behavior and an accessible label.
+
+Verification: all **11 focused Chromium theme, entry and presence checks** passed on their first attempts against a fresh production build, with retries disabled. Coverage verifies switching, reload persistence, returning to System, map-style changes and keyboard entry. TypeScript and scoped lint passed. A separate production preview verified real Mapbox style changes, keyboard focus and desktop/mobile control fit.
 
 ## Phase 3: Make it secure
 

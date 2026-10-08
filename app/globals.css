@@ -44,29 +44,27 @@
   --font-heading: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --background: #172c24;
-    --foreground: #f3e9cf;
-    --surface: #294638;
-    --surface-muted: #354e40;
-    --text-muted: #bbccb5;
-    --action-primary: #e7a35c;
-    --action-primary-hover: #f1b775;
-    --action-primary-text: #172c24;
-    --accent-warm: #e7a35c;
-    --accent-green: #a9c49a;
-    --focus-ring: #e7a35c;
-    --border-subtle: #52775d;
-    --danger: #ffb4a0;
-    --danger-text: #172c24;
-    --shadow-warm: rgb(231 163 92 / 12%);
-    --map-land: #354e40;
-    --map-water: #203a32;
-    --map-atmosphere: #748a6b;
-    --map-control-filter: invert(1);
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #172c24;
+  --foreground: #f3e9cf;
+  --surface: #294638;
+  --surface-muted: #354e40;
+  --text-muted: #bbccb5;
+  --action-primary: #e7a35c;
+  --action-primary-hover: #f1b775;
+  --action-primary-text: #172c24;
+  --accent-warm: #e7a35c;
+  --accent-green: #a9c49a;
+  --focus-ring: #e7a35c;
+  --border-subtle: #52775d;
+  --danger: #ffb4a0;
+  --danger-text: #172c24;
+  --shadow-warm: rgb(231 163 92 / 12%);
+  --map-land: #354e40;
+  --map-water: #203a32;
+  --map-atmosphere: #748a6b;
+  --map-control-filter: invert(1);
 }
 
 @layer base {
@@ -197,6 +195,25 @@
 
   .pulse-brand {
     font-size: 2rem;
+  }
+
+  .pulse-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    pointer-events: auto;
+  }
+
+  .pulse-theme-select {
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--foreground);
+    padding: 0.625rem 0.75rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    box-shadow: 0 2px 12px var(--shadow-warm);
   }
 
   .pulse-presence-count {

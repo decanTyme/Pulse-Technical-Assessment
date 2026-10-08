@@ -17,7 +17,8 @@ type MapStatus = "loading" | "ready" | "error"
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ""
 
-function getMapStyle(dark: boolean) {
+function getMapStyle() {
+  const dark = document.documentElement.dataset.theme === "dark"
   return `mapbox://styles/mapbox/${dark ? "dark" : "light"}-v11`
 }
 
@@ -71,20 +72,29 @@ export default function WorldMap({
     if (!TOKEN || !containerRef.current) return
     let cancelled = false
     const markers = markersRef.current
-    const theme = window.matchMedia("(prefers-color-scheme: dark)")
+    let currentStyle = getMapStyle()
     const updateTheme = () => {
+      const nextStyle = getMapStyle()
+      if (!mapRef.current || nextStyle === currentStyle) return
+      currentStyle = nextStyle
       setStatus("loading")
-      mapRef.current?.setStyle(getMapStyle(theme.matches))
+      mapRef.current.setStyle(nextStyle)
     }
+    const themeObserver = new MutationObserver(updateTheme)
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    })
 
     void (async () => {
       try {
         const mapboxgl = (await import("mapbox-gl")).default
         if (cancelled || !containerRef.current) return
         mapboxgl.accessToken = TOKEN
+        currentStyle = getMapStyle()
         const map = new mapboxgl.Map({
           container: containerRef.current,
-          style: getMapStyle(theme.matches),
+          style: currentStyle,
           projection: "globe",
           center: [20, 20],
           zoom: window.innerWidth < 640 ? 0.55 : 1.25,
@@ -105,7 +115,6 @@ export default function WorldMap({
         map.on("error", () => {
           if (!cancelled) setStatus("error")
         })
-        theme.addEventListener("change", updateTheme)
       } catch {
         if (!cancelled) setStatus("error")
       }
@@ -113,7 +122,7 @@ export default function WorldMap({
 
     return () => {
       cancelled = true
-      theme.removeEventListener("change", updateTheme)
+      themeObserver.disconnect()
       markers.forEach((marker) => marker.remove())
       markers.clear()
       meMarkerRef.current?.remove()

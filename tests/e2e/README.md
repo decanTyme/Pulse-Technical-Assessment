@@ -62,6 +62,7 @@ Specs follow user behavior on Pulse's single page, derived from
 | Spec                                       | Journeys                                                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | [entry.spec.ts](entry.spec.ts)             | Globe-backed entry, keyboard entry, location errors, failed-entry retry, and map-load failure/reload.                                 |
+| [theme.spec.ts](theme.spec.ts)             | Theme selection, saved choices, system-setting changes, and corresponding map-style changes.                                          |
 | [presence.spec.ts](presence.spec.ts)       | Live dots, departure/expiry, fresh privacy offsets, loading/empty/interrupted updates, zoom, and pan.                                 |
 | [connections.spec.ts](connections.spec.ts) | Consent, decline/ignored-request retry, messages in both directions, busy-peer exclusion, End/reconnect, and connected-tab departure. |
 | [video.spec.ts](video.spec.ts)             | Either participant initiates; remote frames/audio, return to chat, decline, and media-permission failure on either side.              |
@@ -72,6 +73,7 @@ Chat assertions require delivery to the recipient. Video assertions require
 remote media reception and usable chat after ending video.
 
 Entry uses Tab/Enter to check keyboard activation and the visible location alert.
+Theme coverage exercises switching and reload persistence through the actual control.
 Color contrast, font appearance, and responsive layouts are reviewed separately.
 
 Ownership and consent specs use authenticated HTTP requests against the same
