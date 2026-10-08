@@ -15,7 +15,7 @@ test("entry explains the anonymous session and offers an enabled action", async 
   await expect(page.getByText(/No sign-up/)).toBeVisible()
 })
 
-test("denied location stays at the gate and allows another attempt", async ({
+test("keyboard entry shows a visible location alert and permits retry", async ({
   page,
 }) => {
   // Emulate a browser error, without depending on a native permission dialog.
@@ -40,13 +40,18 @@ test("denied location stays at the gate and allows another attempt", async ({
 
   await page.goto("/")
 
-  await page.getByRole("button", { name: "Enter Pulse", exact: true }).click()
-  await expect(
-    page.getByText("Location permission is required to place you on the map."),
-  ).toBeVisible()
-  await expect(
-    page.getByRole("button", { name: "Enter Pulse", exact: true }),
-  ).toBeEnabled()
+  const enter = page.getByRole("button", { name: "Enter Pulse", exact: true })
+  await expect(enter).toBeEnabled()
+  await page.keyboard.press("Tab")
+  await expect(enter).toBeFocused()
+  await page.keyboard.press("Enter")
+
+  const locationError =
+    "Location permission is required to place you on the map."
+  const alert = page.getByRole("alert").filter({ hasText: locationError })
+  await expect(alert).toHaveText(locationError)
+  await expect(alert).toBeVisible()
+  await expect(enter).toBeEnabled()
   expect(attemptedJoin).toBe(false)
 })
 

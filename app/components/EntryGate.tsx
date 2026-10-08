@@ -42,10 +42,10 @@ export default function EntryGate({ onReady }: EntryGateProps) {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-8 bg-zinc-950 p-6 text-zinc-100">
+    <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-8 bg-background p-6 text-foreground">
       <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Pulse</h1>
-        <p className="mt-2 max-w-sm text-zinc-400">
+        <h1 className="type-wordmark">Pulse</h1>
+        <p className="type-body mt-2 max-w-sm text-muted">
           A living globe of anonymous strangers. Drop onto the map and connect.
         </p>
       </div>
@@ -53,16 +53,21 @@ export default function EntryGate({ onReady }: EntryGateProps) {
       <button
         onClick={enter}
         disabled={status === "locating"}
-        className="rounded-full bg-emerald-400 px-8 py-3 font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:opacity-60"
+        className="pulse-button pulse-button-primary px-8"
       >
         {status === "locating" ? "Locating…" : "Enter Pulse"}
       </button>
 
       {status === "error" && (
-        <p className="max-w-sm text-center text-sm text-red-400">{error}</p>
+        <p
+          role="alert"
+          className="type-status max-w-sm text-center text-danger"
+        >
+          {error}
+        </p>
       )}
 
-      <p className="max-w-sm text-center text-xs text-zinc-500">
+      <p className="max-w-sm text-center text-xs text-muted">
         No sign-up. Your dot is placed 1–3&nbsp;km from your real location.
         Nothing is stored — closing the tab ends everything.
       </p>

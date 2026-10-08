@@ -61,7 +61,7 @@ Specs follow user behavior on Pulse's single page, derived from
 
 | Spec                                       | Journeys                                                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [entry.spec.ts](entry.spec.ts)             | Entry screen, denied location, location timeout, and failed-entry retry.                                                              |
+| [entry.spec.ts](entry.spec.ts)             | Entry screen, keyboard entry, denied-location alert, location timeout, and failed-entry retry.                                        |
 | [presence.spec.ts](presence.spec.ts)       | Live dots, clean departure, missed-heartbeat expiry, new sessions/privacy offsets, zoom, and pan.                                     |
 | [connections.spec.ts](connections.spec.ts) | Consent, decline/ignored-request retry, messages in both directions, busy-peer exclusion, End/reconnect, and connected-tab departure. |
 | [video.spec.ts](video.spec.ts)             | Either participant initiates; remote frames/audio, return to chat, decline, and media-permission failure on either side.              |
@@ -70,6 +70,9 @@ Specs follow user behavior on Pulse's single page, derived from
 
 Chat assertions require delivery to the recipient. Video assertions require
 remote media reception and usable chat after ending video.
+
+Entry uses Tab/Enter to check keyboard activation and the visible location alert.
+Color contrast, font appearance, and responsive layouts are reviewed separately.
 
 Ownership and consent specs use authenticated HTTP requests against the same
 production server and isolated database. They assert public responses and owner

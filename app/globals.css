@@ -1,28 +1,164 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #fdf5e8;
+  --foreground: #2f5132;
+  --surface: #fff9ee;
+  --surface-muted: #efe7d7;
+  --text-muted: #596b5d;
+  --action-primary: #b94f30;
+  --action-primary-hover: #a5462b;
+  --action-primary-text: #fff9ee;
+  --accent-warm: #d96b45;
+  --accent-green: #52775d;
+  --focus-ring: #b94f30;
+  --border-subtle: #d4d9ca;
+  --danger: #a9352c;
+  --danger-text: #fff9ee;
+  --shadow-warm: rgb(185 79 48 / 18%);
+  --radius-control: 0.75rem;
+  --radius-panel: 1rem;
+  --font-body: var(--font-dm-sans), Arial, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-muted: var(--text-muted);
+  --color-primary: var(--action-primary);
+  --color-primary-foreground: var(--action-primary-text);
+  --color-accent-warm: var(--accent-warm);
+  --color-accent-green: var(--accent-green);
+  --color-focus: var(--focus-ring);
+  --color-border: var(--border-subtle);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+    --background: #172c24;
+    --foreground: #f3e9cf;
+    --surface: #294638;
+    --surface-muted: #354e40;
+    --text-muted: #bbccb5;
+    --action-primary: #e7a35c;
+    --action-primary-hover: #f1b775;
+    --action-primary-text: #172c24;
+    --accent-warm: #e7a35c;
+    --accent-green: #a9c49a;
+    --focus-ring: #e7a35c;
+    --border-subtle: #52775d;
+    --danger: #ffb4a0;
+    --danger-text: #172c24;
+    --shadow-warm: rgb(231 163 92 / 12%);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    line-height: 1.5;
+  }
+
+  :where(button, input, textarea, select, a):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .type-wordmark,
+  .type-hero,
+  .type-card-heading {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-variation-settings:
+      "SOFT" 50,
+      "WONK" 0;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+  }
+
+  .type-wordmark {
+    font-size: 2.5rem;
+    line-height: 1.1;
+  }
+
+  .type-hero {
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+    line-height: 1.08;
+  }
+
+  .type-card-heading {
+    font-size: 1.5rem;
+    line-height: 1.2;
+  }
+
+  .type-body,
+  .type-chat {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .type-status {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .pulse-button {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 0;
+    border-radius: var(--radius-control);
+    padding: 0.625rem 1.25rem;
+    font-family: var(--font-body);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .pulse-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .pulse-button-primary {
+    background: var(--action-primary);
+    color: var(--action-primary-text);
+    box-shadow: 0 4px 12px var(--shadow-warm);
+  }
+
+  .pulse-button-primary:hover:not(:disabled) {
+    background: var(--action-primary-hover);
+    box-shadow: 0 5px 16px var(--shadow-warm);
+  }
+
+  .pulse-button-secondary {
+    background: var(--surface-muted);
+    color: var(--foreground);
+  }
+
+  .pulse-button-danger {
+    background: var(--danger);
+    color: var(--danger-text);
+  }
 }
 
 /* Live user dots on the map */
@@ -75,5 +211,16 @@ body {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-button,
+  .pulse-dot {
+    transition: none;
+  }
+
+  .pulse-dot {
+    animation: none;
   }
 }

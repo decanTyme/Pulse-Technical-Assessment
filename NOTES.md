@@ -2,7 +2,7 @@
 
 ## Delivery priorities and AI-assisted work
 
-I set a deploy-ready baseline as the first milestone: working core journeys, prioritized API security fixes, and production/deployment verification. The next priority after the browser baseline is the API security review. Visual redesign and an additional feature remain part of the assessment, sequenced after that milestone.
+I prioritized working core journeys and the highest-impact security fixes before the redesign. The next milestone is a complete, usable UI baseline, followed by deployment verification and the additional feature. Remaining hardening is recorded separately so it does not consume the time reserved for design and product work.
 
 I used Codex for repository tracing, documentation research, implementation drafts, and regression tests. I asked for research findings before implementing unfamiliar pieces and for file references and explanations when reviewing changes. I challenged proposals that added more infrastructure or test scope than the assessment needed. Related fixes and regression coverage were kept together for review; the milestones determined the order of work.
 
@@ -55,7 +55,13 @@ Local entry completes in under one second and signaling requests in under 100 ms
 
 ## Phase 2: Make it good
 
-Pending. No visual redesign has been selected or implemented.
+### Color and typography foundation
+
+I chose a hopeful solarpunk direction: warm cream and terracotta for golden hour, forest green with amber for dusk. Fraunces carries expressive display text; DM Sans carries working UI. [The layout](app/layout.tsx) loads both through `next/font`, which downloads them at build time and serves them with the app. [Semantic tokens and type roles](app/globals.css) keep the palette and fonts adjustable in one place. The themes follow the system color preference in this first increment.
+
+The [entry screen](app/components/EntryGate.tsx) is the first consumer, with modestly rounded controls, visible keyboard focus, 44 px minimum button height, and announced errors. Primary-button text contrast measures **4.74:1 in light** and **6.88:1 in dark**; body, muted, secondary and error color pairs also exceed 4.5:1. Reduced-motion rules disable the shared button transitions and existing dot pulse.
+
+Verification: the production build, TypeScript, scoped lint, and all four Chromium entry journeys passed, with no retries. Entry coverage includes keyboard activation, a visible location alert, and an enabled retry action. Browser inspection covered both themes at 1280×800 and 390×844, including actual font loading, keyboard focus and horizontal overflow. This establishes the foundation; the globe-backed welcome card, accurate privacy copy, discovery feedback, and responsive conversation panels are the next increments. The complete redesign and full browser rerun remain pending.
 
 ## Phase 3: Make it secure
 
