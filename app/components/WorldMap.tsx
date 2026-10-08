@@ -379,10 +379,10 @@ export default function WorldMap({
         map.easeTo({ center: [me.lng, me.lat], zoom: 2.6, duration: 600 })
       } else {
         meMarkerRef.current.setLngLat([me.lng, me.lat])
-        const label = meMarkerRef.current.getElement().querySelector(".pulse-status")
+        const label = meMarkerRef.current.getElement().querySelector<HTMLElement>(".pulse-status")
         if (label) {
           label.textContent = meStatus
-          (label as HTMLElement).title = meStatus
+          label.title = meStatus
           if (!meStatus) label.remove()
         }
       }
