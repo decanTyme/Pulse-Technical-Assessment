@@ -2,7 +2,7 @@
 
 The initial review was conducted on 2026-10-08 against commit `b7c7fb6`. Session ownership (001), connection consent (002), and media-acquisition cancellation (003) are implemented. Verification and its limits are recorded with each resolution. Findings 004–010 remain open, with baseline and hardening priorities listed below. Original findings are retained alongside their resolutions and verification results.
 
-The review identified session ownership, connection authorization, and camera/microphone cancellation as the highest-impact risks. Private credentials authorize session operations, server-owned connection state enforces recipient consent and pair membership, and media cancellation stops capture results from obsolete attempts. Bounded API inputs, abuse controls, and accurate privacy wording remain open priorities.
+The review identified session ownership, connection authorization, and camera/microphone cancellation as the highest-impact risks. Private credentials authorize session operations, server-owned connection state enforces recipient consent and pair membership, and media cancellation stops capture results from obsolete attempts. Entry privacy disclosures distinguish server coordination from peer-to-peer content and explain cleanup limits. Bounded API inputs, abuse controls, and independently bounded retention remain open priorities.
 
 ## Scope and evidence
 
@@ -23,7 +23,7 @@ Severity reflects impact at discovery. The baseline column identifies controls r
 | 003 | High     | Late media acquisition survives stop/disconnect             | Completed: cancel pending capture and stop late tracks      | Native-device timing checks                          |
 | 004 | Medium   | Request and signaling validation is incomplete              | Bound bodies/IDs and validate payloads by signal type       | Extend malformed-input coverage as needed            |
 | 005 | Medium   | Coordination work and storage lack application abuse limits | Set and verify practical request/queue budgets              | Adaptive controls and broader load testing           |
-| 006 | Medium   | Privacy copy overpromises storage and deletion behavior     | Correct the copy and disclose coordination/network metadata | Bound physical retention independently of visitors   |
+| 006 | Medium   | Original privacy copy overpromised storage and deletion     | Disclosures corrected; retention verification remains open  | Bound physical retention independently of visitors   |
 | 007 | Medium   | Peer messages and client collections are unbounded          | Keep accepted-peer trust assumptions explicit               | Cap messages, history, candidates, and control input |
 | 008 | Medium   | Polar inputs can defeat the privacy offset                  | Record the geographic limitation                            | Use a geodesic offset with boundary checks           |
 | 009 | Low      | Security-header policy is not configured in the app         | Verify deployed headers/configuration                       | Add compatible CSP/framing/cache policies            |
@@ -101,7 +101,9 @@ Join can create arbitrarily many sessions; signal writes have no per-actor or qu
 
 **Rule:** application privacy/retention requirements. **Evidence:** static data flow and cleanup review; infrastructure retention was not inspected.
 
-[EntryGate](../app/components/EntryGate.tsx#L59) says nothing is stored and closing the tab ends everything. The [schema](../prisma/schema.prisma#L14) stores offset coordinates and signaling payloads. Cleanup runs on leave or poll; stale-time constants are eligibility thresholds, not an independent deletion timer. When all visitors stop polling and departure is lost, rows remain until another cleanup call. Raw location also reaches join before offsetting; chat/video content has no server-side storage path in the reviewed code. WebRTC signaling may contain network addresses, as described in the [W3C security/privacy considerations](https://www.w3.org/TR/webrtc/#security-and-privacy-considerations).
+The original entry copy claimed nothing was stored and closing the tab ended everything. The [schema](../prisma/schema.prisma#L14) stores offset coordinates and signaling payloads. Cleanup runs on leave or poll; stale-time constants are eligibility thresholds, not an independent deletion timer. When all visitors stop polling and departure is lost, rows remain until another cleanup call. Raw location also reaches join before offsetting; chat/video content has no server-side storage path in the reviewed code. WebRTC signaling may contain network addresses, as described in the [W3C security/privacy considerations](https://www.w3.org/TR/webrtc/#security-and-privacy-considerations).
+
+**Disclosure correction:** [EntryGate](../app/components/EntryGate.tsx) explains the approximate dot, server-held location/connection details, original location sent to join, Mapbox, peer-network addresses, and best-effort departure cleanup. It no longer promises immediate deletion or absence of server storage. The own marker and camera use the server's offset position. Independently bounded cleanup and provider/log/backup retention remain unverified hardening work.
 
 **Baseline requirement:** privacy wording must distinguish peer-to-peer chat/video from transient server coordination, disclose location-offset and peer-network limitations, and describe departure as best-effort cleanup with stale-session removal. **Hardening:** physical cleanup needs a bounded schedule independent of visitors, supported by verification of provider, log, and backup retention. External cleanup could alter the retention assessment; none is configured in this repository.
 
@@ -143,6 +145,6 @@ The [offset function](../lib/geo.ts#L15) approximates degree distances and clamp
 
 ## Implementation order and remaining verification
 
-Input and abuse limits (004/005), privacy wording (006), and deployment configuration remain open security priorities. Actor and pair boundaries support the abuse controls. Each implemented control requires focused regression coverage and verification against the core journeys it affects.
+Input and abuse limits (004/005), independent retention (006), and deployment configuration remain open security priorities. Actor and pair boundaries support the abuse controls. Each implemented control requires focused regression coverage and verification against the core journeys it affects.
 
 Deployment readiness also requires verification of production headers and TLS, Mapbox public-token scopes and URL restrictions, and runtime database-role privileges. These account settings remain uninspected. A browser-visible Mapbox public token is expected and does not imply a leaked server secret. The separately documented acceptance-response-loss scenario remains unverified after the matching-end change; the core suite does not exercise that fault-injection case.

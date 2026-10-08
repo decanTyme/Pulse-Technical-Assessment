@@ -9,7 +9,12 @@ import VideoPanel from "./components/VideoPanel"
 import { join, leave, poll, sendSignal } from "@/lib/api"
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc"
 import { POLL_INTERVAL_MS, REQUEST_TIMEOUT_MS } from "@/lib/presence"
-import { type PeerDot, type SignalMsg, type SignalType } from "@/lib/types"
+import {
+  type MapLocation,
+  type PeerDot,
+  type SignalMsg,
+  type SignalType,
+} from "@/lib/types"
 
 interface ConnectionAttempt {
   peerId: string
@@ -23,6 +28,7 @@ type Conn =
     })
 
 type VideoState = "none" | "requesting" | "incoming" | "active"
+type PresenceStatus = "loading" | "ready" | "degraded"
 
 interface PendingCleanup extends ConnectionAttempt {
   peer: PeerSession | null
@@ -34,14 +40,13 @@ export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate")
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [peers, setPeers] = useState<PeerDot[]>([])
+  const [presenceStatus, setPresenceStatus] =
+    useState<PresenceStatus>("loading")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
-  const [myLocation, setMyLocation] = useState<{
-    lat: number
-    lng: number
-  } | null>(null)
+  const [myLocation, setMyLocation] = useState<MapLocation | null>(null)
 
   const [conn, _setConn] = useState<Conn>({ kind: "idle" })
   const connRef = useRef<Conn>(conn)
@@ -495,6 +500,7 @@ export default function Home() {
         if (!active) return
 
         setPeers(data.peers)
+        setPresenceStatus("ready")
 
         const current = connRef.current
         const hasPeerDisconnected =
@@ -508,7 +514,9 @@ export default function Home() {
         for (const s of data.signals) {
           processSignalRef.current(s)
         }
-      } catch {}
+      } catch {
+        if (active) setPresenceStatus("degraded")
+      }
 
       if (active) {
         timer = setTimeout(tick, POLL_INTERVAL_MS)
@@ -535,26 +543,73 @@ export default function Home() {
   }, [sessionId, phase])
 
   async function handleReady(lat: number, lng: number) {
-    setMyLocation({ lat, lng })
-    const id = await join(lat, lng)
+    const { id, location } = await join(lat, lng)
+    setMyLocation(location)
     setSessionId(id)
     setPhase("live")
   }
 
-  if (phase === "gate") {
-    return <EntryGate onReady={handleReady} />
-  }
-
+  const hasJoined = phase === "live"
   const inChat = conn.kind === "connecting" || conn.kind === "connected"
+  const canDiscover = hasJoined && conn.kind === "idle"
 
   return (
-    <main className="fixed inset-0 overflow-hidden">
+    <main className="pulse-shell">
       <WorldMap
         peers={peers}
         me={myLocation}
         onPeerClick={requestConnection}
-        canConnect={conn.kind === "idle"}
+        interactive={hasJoined}
+        canConnect={canDiscover && presenceStatus === "ready"}
       />
+
+      <header className="pulse-header">
+        <h1 className="type-wordmark pulse-brand">Pulse</h1>
+        {hasJoined && (
+          <p role="status" className="pulse-presence-count type-status">
+            {presenceStatus === "ready" ? (
+              <>
+                <span className="block text-xs font-normal text-muted">
+                  Other people
+                </span>
+                <span>{peers.length} online</span>
+              </>
+            ) : presenceStatus === "degraded" ? (
+              "Live updates paused"
+            ) : (
+              "Finding people…"
+            )}
+          </p>
+        )}
+      </header>
+
+      {!hasJoined && <EntryGate onReady={handleReady} />}
+
+      {canDiscover && (
+        <section
+          className="pulse-discovery"
+          aria-labelledby="discovery-heading"
+        >
+          <h2 id="discovery-heading" className="type-card-heading">
+            {presenceStatus === "degraded"
+              ? "Live updates paused"
+              : presenceStatus === "loading"
+                ? "Finding people…"
+                : peers.length === 0
+                  ? "A quiet moment on the globe."
+                  : "Find your next conversation"}
+          </h2>
+          <p className="mt-2 text-sm text-muted">
+            {presenceStatus === "degraded"
+              ? "We couldn't refresh the dots. Retrying automatically; the visible dots may be out of date."
+              : presenceStatus === "loading"
+                ? "Your dot is ready. We're checking who's here."
+                : peers.length === 0
+                  ? "No one else is here yet. New dots appear as people join."
+                  : "Select an available dot to say hello. A faded dot is already in a conversation."}
+          </p>
+        </section>
+      )}
 
       {notice && (
         <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">

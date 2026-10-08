@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   })
 
   return Response.json(
-    { ok: true, id, token },
+    { ok: true, id, token, location: offset },
     { headers: { "Cache-Control": "no-store" } },
   )
 }

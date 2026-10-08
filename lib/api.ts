@@ -3,12 +3,17 @@ import type { PollResponse, SignalType } from "@/lib/types"
 import { z } from "zod"
 
 type JoinResponse = z.infer<typeof JoinResponseSchema>
+type JoinedSession = Pick<JoinResponse, "id" | "location">
 
 const SIGNAL_TIMEOUT_MS = 15_000
 const JoinResponseSchema = z.object({
   ok: z.literal(true),
   id: z.uuid(),
   token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  location: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  }),
 })
 
 // Each page keeps its private capability in memory, separate from public dot IDs.
@@ -22,7 +27,7 @@ function getSessionToken(id: string): string {
   return session.token
 }
 
-export async function join(lat: number, lng: number): Promise<string> {
+export async function join(lat: number, lng: number): Promise<JoinedSession> {
   try {
     const response = await fetch("/api/join", {
       method: "POST",
@@ -40,7 +45,7 @@ export async function join(lat: number, lng: number): Promise<string> {
     }
 
     session = result.data
-    return session.id
+    return { id: session.id, location: session.location }
   } catch {
     throw new Error("Could not enter Pulse.")
   }

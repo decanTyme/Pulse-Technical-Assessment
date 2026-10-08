@@ -61,8 +61,8 @@ Specs follow user behavior on Pulse's single page, derived from
 
 | Spec                                       | Journeys                                                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [entry.spec.ts](entry.spec.ts)             | Entry screen, keyboard entry, denied-location alert, location timeout, and failed-entry retry.                                        |
-| [presence.spec.ts](presence.spec.ts)       | Live dots, clean departure, missed-heartbeat expiry, new sessions/privacy offsets, zoom, and pan.                                     |
+| [entry.spec.ts](entry.spec.ts)             | Globe-backed entry, keyboard entry, location errors, failed-entry retry, and map-load failure/reload.                                 |
+| [presence.spec.ts](presence.spec.ts)       | Live dots, departure/expiry, fresh privacy offsets, loading/empty/interrupted updates, zoom, and pan.                                 |
 | [connections.spec.ts](connections.spec.ts) | Consent, decline/ignored-request retry, messages in both directions, busy-peer exclusion, End/reconnect, and connected-tab departure. |
 | [video.spec.ts](video.spec.ts)             | Either participant initiates; remote frames/audio, return to chat, decline, and media-permission failure on either side.              |
 | [ownership.spec.ts](ownership.spec.ts)     | Real API/database checks: fresh IDs, denied impersonation/deletion/mailbox access, and preserved owner signaling.                     |
@@ -87,12 +87,17 @@ Participants use synthetic locations and fake camera/microphone devices.
 Location errors and media denial are injected at browser API boundaries.
 The entry-retry scenario intercepts only the first join with HTTP 503, before
 any server write; its retry uses the real join API and test database.
+The map-reload scenario fails the first style download, then restores the blank
+style. Discovery checks hold the first poll and fail one later poll to verify
+loading, interrupted updates, and recovery through the real API.
 The ignored-request scenario advances only the initiator's browser clock;
 server expiry uses real time.
 
 Privacy checks measure broadcast coordinates with an independent great-circle
 calculation, allowing 10 m tolerance for the starter's approximate offset
 conversion. They do not audit database rows or logs for raw locations/messages.
+The join response's approximate position is compared with the position another
+participant receives; the application uses that same position for its own dot.
 
 Mapbox's SDK and markers run with intercepted downloads and a blank style.
 The placeholder token is sufficient for those intercepted requests; real map

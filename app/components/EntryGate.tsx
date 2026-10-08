@@ -6,9 +6,13 @@ interface EntryGateProps {
   onReady: (lat: number, lng: number) => Promise<void>
 }
 
+type EntryStatus = "idle" | "locating" | "joining" | "error"
+
 export default function EntryGate({ onReady }: EntryGateProps) {
-  const [status, setStatus] = useState<"idle" | "locating" | "error">("idle")
+  const [status, setStatus] = useState<EntryStatus>("idle")
   const [error, setError] = useState<string>("")
+
+  const isEntering = status === "locating" || status === "joining"
 
   function enter() {
     if (!("geolocation" in navigator)) {
@@ -20,6 +24,7 @@ export default function EntryGate({ onReady }: EntryGateProps) {
     setStatus("locating")
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        setStatus("joining")
         try {
           await onReady(pos.coords.latitude, pos.coords.longitude)
         } catch {
@@ -42,35 +47,62 @@ export default function EntryGate({ onReady }: EntryGateProps) {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-8 bg-background p-6 text-foreground">
-      <div className="text-center">
-        <h1 className="type-wordmark">Pulse</h1>
-        <p className="type-body mt-2 max-w-sm text-muted">
-          A living globe of anonymous strangers. Drop onto the map and connect.
-        </p>
-      </div>
-
-      <button
-        onClick={enter}
-        disabled={status === "locating"}
-        className="pulse-button pulse-button-primary px-8"
+    <div className="pulse-entry-overlay">
+      <section
+        aria-labelledby="welcome-heading"
+        aria-busy={isEntering}
+        className="pulse-welcome"
       >
-        {status === "locating" ? "Locating…" : "Enter Pulse"}
-      </button>
-
-      {status === "error" && (
-        <p
-          role="alert"
-          className="type-status max-w-sm text-center text-danger"
-        >
-          {error}
+        <h2 id="welcome-heading" className="type-hero">
+          The world feels closer together.
+        </h2>
+        <p className="type-body mt-4 text-muted">
+          Meet someone new across the globe. Start with a hello.
         </p>
-      )}
 
-      <p className="max-w-sm text-center text-xs text-muted">
-        No sign-up. Your dot is placed 1–3&nbsp;km from your real location.
-        Nothing is stored — closing the tab ends everything.
-      </p>
+        <button
+          onClick={enter}
+          disabled={isEntering}
+          className="pulse-button pulse-button-primary mt-6 w-full"
+        >
+          {status === "locating"
+            ? "Finding your location…"
+            : status === "joining"
+              ? "Entering Pulse…"
+              : "Enter Pulse"}
+        </button>
+
+        {isEntering && (
+          <p role="status" className="type-status mt-3 text-muted">
+            {status === "locating"
+              ? "Allow location access to place your dot."
+              : "Getting your place on the globe ready."}
+          </p>
+        )}
+
+        {status === "error" && (
+          <p role="alert" className="type-status mt-3 text-danger">
+            {error}
+          </p>
+        )}
+
+        <p className="mt-5 text-sm leading-relaxed text-muted">
+          No sign-up. Your dot is offset by about 1–3&nbsp;km. Chat and video
+          travel directly between participants.
+        </p>
+        <details className="mt-3 text-sm leading-relaxed text-muted">
+          <summary className="w-fit cursor-pointer rounded-sm">
+            Your location and privacy
+          </summary>
+          <p className="mt-2">
+            We store approximate locations and connection details to coordinate
+            sessions. Your browser sends its original location to our server,
+            and Mapbox supplies the map. Peer connections may reveal network
+            addresses. Closing the tab requests cleanup; if that request is
+            lost, inactive data is removed during later activity.
+          </p>
+        </details>
+      </section>
     </div>
   )
 }

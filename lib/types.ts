@@ -10,10 +10,13 @@ export type SignalType =
   | "ice" // WebRTC ICE candidate
   | "end" // hang up / leave the connection
 
-export interface PeerDot {
-  id: string
+export interface MapLocation {
   lat: number
   lng: number
+}
+
+export interface PeerDot extends MapLocation {
+  id: string
   busy: boolean
 }
 

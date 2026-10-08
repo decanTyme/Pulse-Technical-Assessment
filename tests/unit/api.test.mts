@@ -10,9 +10,15 @@ type TimeoutCallback = () => void
 
 const SESSION_ID = "00000000-0000-4000-8000-000000000001"
 const SESSION_TOKEN = "a".repeat(43)
+const SESSION_LOCATION = { lat: 1.015, lng: 2.01 }
 
 function createJoinResponse() {
-  return Response.json({ ok: true, id: SESSION_ID, token: SESSION_TOKEN })
+  return Response.json({
+    ok: true,
+    id: SESSION_ID,
+    token: SESSION_TOKEN,
+    location: SESSION_LOCATION,
+  })
 }
 
 test("failed joins return a fixed error without storing credentials", async () => {
@@ -164,7 +170,10 @@ test("the client sends private credentials in headers or the departure beacon, n
     },
   )
 
-  assert.equal(await api.join(1, 2), SESSION_ID)
+  const joined = await api.join(1, 2)
+  assert.equal(joined.id, SESSION_ID)
+  assert.equal(joined.location.lat, SESSION_LOCATION.lat)
+  assert.equal(joined.location.lng, SESSION_LOCATION.lng)
 
   await api.poll(SESSION_ID)
   await api.sendSignal(SESSION_ID, "bob", "request", CONNECTION_ID)

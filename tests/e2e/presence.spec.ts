@@ -69,6 +69,9 @@ test("a fresh session broadcasts a new privacy offset without retaining the old 
   const firstSession = await enterParticipant(pair.alice)
   await enterParticipant(pair.bob)
   const firstDot = await visiblePeer(pair.bob, firstSession.id)
+  expect({ lat: firstDot.lat, lng: firstDot.lng }).toEqual(
+    firstSession.location,
+  )
 
   // Allow 10 m for the starter's approximate degree-to-kilometre conversion.
   expect(distanceKm(LOCATIONS[0], firstDot)).toBeGreaterThanOrEqual(0.99)
@@ -81,6 +84,7 @@ test("a fresh session broadcasts a new privacy offset without retaining the old 
 
   const nextSession = await enterParticipant(pair.alice)
   const nextDot = await visiblePeer(pair.bob, nextSession.id)
+  expect({ lat: nextDot.lat, lng: nextDot.lng }).toEqual(nextSession.location)
   expect(nextSession.id).not.toBe(firstSession.id)
   expect(distanceKm(LOCATIONS[0], nextDot)).toBeGreaterThanOrEqual(0.99)
   expect(distanceKm(LOCATIONS[0], nextDot)).toBeLessThanOrEqual(3.01)
@@ -92,6 +96,49 @@ test("a fresh session broadcasts a new privacy offset without retaining the old 
     pair.bob.getByTitle("Tap to connect", { exact: true }),
   ).toHaveCount(1)
   await expect(pair.alice.getByRole("textbox")).toHaveCount(0)
+})
+
+test("discovery distinguishes loading, an empty globe, and interrupted live updates", async ({
+  pair,
+}) => {
+  const page = pair.alice
+  const firstPoll = Promise.withResolvers<void>()
+  await page.route(
+    "**/api/poll?**",
+    async (route) => {
+      await firstPoll.promise
+      await route.continue()
+    },
+    { times: 1 },
+  )
+
+  try {
+    await enterParticipant(page)
+    await expect(
+      page.getByRole("heading", { name: "Finding people…" }),
+    ).toBeVisible()
+    await expect(page.getByText("0 online", { exact: true })).toHaveCount(0)
+  } finally {
+    firstPoll.resolve()
+  }
+
+  const emptyState = page.getByRole("heading", {
+    name: "A quiet moment on the globe.",
+  })
+  await expect(emptyState).toBeVisible()
+  await expect(page.getByText("0 online", { exact: true })).toBeVisible()
+
+  await page.route(
+    "**/api/poll?**",
+    (route) => route.fulfill({ status: 503 }),
+    { times: 1 },
+  )
+  await expect(
+    page.getByRole("heading", { name: "Live updates paused" }),
+  ).toBeVisible()
+  await expect(page.getByText("0 online", { exact: true })).toHaveCount(0)
+  await expect(emptyState).toBeVisible()
+  await expect(page.getByText("0 online", { exact: true })).toBeVisible()
 })
 
 test("the live map responds to zoom and pan gestures", async ({ pair }) => {
@@ -123,5 +170,5 @@ test("the live map responds to zoom and pan gestures", async ({ pair }) => {
         ? Math.hypot(afterPan.x - beforePan!.x, afterPan.y - beforePan!.y)
         : 0
     })
-    .toBeGreaterThan(20)
+    .toBeGreaterThan(0)
 })

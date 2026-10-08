@@ -105,6 +105,7 @@ test("valid boundary joins persist offset coordinates and omit unused fields", a
     assert.equal(response.headers.get("cache-control"), "no-store")
     assert.match(data.id, /^[a-f0-9-]{36}$/)
     assert.match(data.token, /^[A-Za-z0-9_-]{43}$/)
+    assert.deepEqual(data.location, offset)
     assert.deepEqual(inputs.at(-1), [body.lat, body.lng])
 
     const write = writes.at(-1)

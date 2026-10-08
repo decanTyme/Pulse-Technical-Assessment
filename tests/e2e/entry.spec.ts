@@ -1,4 +1,8 @@
-import { expect, test } from "./fixtures"
+import { expect, mockMapDownloads, test } from "./fixtures"
+
+test.beforeEach(async ({ context }) => {
+  await mockMapDownloads(context)
+})
 
 test("entry explains the anonymous session and offers an enabled action", async ({
   page,
@@ -13,6 +17,10 @@ test("entry explains the anonymous session and offers an enabled action", async 
     page.getByRole("button", { name: "Enter Pulse", exact: true }),
   ).toBeEnabled()
   await expect(page.getByText(/No sign-up/)).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "The world feels closer together." }),
+  ).toBeVisible()
+  await expect(page.locator(".mapboxgl-canvas")).toBeVisible()
 })
 
 test("keyboard entry shows a visible location alert and permits retry", async ({
@@ -112,8 +120,38 @@ test("a failed join stays at the gate and a retry enters the globe", async ({
   await expect(
     page.getByRole("heading", { name: "Pulse", exact: true }),
   ).toBeVisible()
+  await expect(page.locator(".mapboxgl-canvas")).toBeVisible()
 
   await enter.click()
   await expect(page.getByTitle("You are here", { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "The world feels closer together." }),
+  ).toHaveCount(0)
   expect(pageErrors).toEqual([])
+})
+
+test("a failed map download keeps entry usable and allows a map reload", async ({
+  page,
+}) => {
+  await page.route(
+    /\/styles\/v1\/mapbox\/(light|dark)-v11\?/,
+    (route) => route.fulfill({ status: 503, body: "Map unavailable" }),
+    { times: 1 },
+  )
+  await page.goto("/")
+
+  await expect(
+    page.getByText("The map couldn't load.", { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole("button", { name: "Enter Pulse", exact: true }),
+  ).toBeEnabled()
+  await page.getByRole("button", { name: "Reload map", exact: true }).click()
+  await expect(
+    page.getByText("The map couldn't load.", { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByText("Loading the globe…", { exact: true }),
+  ).toHaveCount(0)
+  await expect(page.locator(".mapboxgl-canvas")).toBeVisible()
 })

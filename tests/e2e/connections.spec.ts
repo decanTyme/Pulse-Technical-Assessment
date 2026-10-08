@@ -94,13 +94,12 @@ test("a third participant cannot interrupt an active connection", async ({
   await pair.connect()
   const third = await pair.addParticipant()
   await enterParticipant(third)
-  await expect(third.getByTitle("Tap to connect", { exact: true })).toHaveCount(
-    2,
-  )
-  await third.getByTitle("Tap to connect", { exact: true }).first().click()
-  await expect(
-    third.getByText("Request declined.", { exact: true }),
-  ).toBeVisible()
+  const busyDots = third.getByRole("button", {
+    name: "In a conversation",
+    exact: true,
+  })
+  await expect(busyDots).toHaveCount(2)
+  for (const dot of await busyDots.all()) await expect(dot).toBeDisabled()
   await expect(third.getByRole("textbox")).toHaveCount(0)
   await expect(
     pair.alice.getByRole("heading", { name: "A stranger wants to connect" }),

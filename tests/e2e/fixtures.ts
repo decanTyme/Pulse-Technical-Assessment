@@ -6,11 +6,17 @@ import {
 } from "@playwright/test"
 import { BASE_URL } from "./config"
 import type { SessionCredentials } from "../../lib/session"
+import type { MapLocation } from "../../lib/types"
+
+interface JoinResult extends SessionCredentials {
+  location: MapLocation
+}
 
 interface EnteredParticipant {
   id: string
   lat: number
   lng: number
+  location: MapLocation
 }
 
 interface Pair {
@@ -32,7 +38,7 @@ export async function mockMapDownloads(context: BrowserContext) {
     /^https:\/\/(api|events)\.mapbox\.com\//,
     async (route) => {
       const url = new URL(route.request().url())
-      if (url.pathname === "/styles/v1/mapbox/dark-v11") {
+      if (/^\/styles\/v1\/mapbox\/(light|dark)-v11$/.test(url.pathname)) {
         await route.fulfill({
           json: {
             version: 8,
@@ -69,10 +75,10 @@ export async function enterParticipant(
   expect(response.status(), "the real join API succeeds").toBe(200)
   await expect(page.getByTitle("You are here", { exact: true })).toBeVisible()
 
-  const { id } = (await response.json()) as SessionCredentials
+  const { id, location } = (await response.json()) as JoinResult
   const { lat, lng } = response.request().postDataJSON()
 
-  return { id, lat, lng }
+  return { id, lat, lng, location }
 }
 
 export const test = base.extend<{ pair: Pair }>({
@@ -124,8 +130,6 @@ export const test = base.extend<{ pair: Pair }>({
         enter: async () => {
           await enterParticipant(alice)
           await enterParticipant(bob)
-          // Mapbox 3 assigns role="img" to custom marker elements, including
-          // these buttons. Their existing title remains a stable user-facing locator.
           await expect(
             alice.getByTitle("Tap to connect", { exact: true }),
           ).toHaveCount(1)
