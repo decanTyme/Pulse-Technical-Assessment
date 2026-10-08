@@ -20,7 +20,7 @@ export const LOCATIONS = [
   { latitude: 10.3157, longitude: 123.8854 },
 ]
 
-async function localMap(context: BrowserContext) {
+export async function mockMapDownloads(context: BrowserContext) {
   await context.route(
     /^https:\/\/(api|events)\.mapbox\.com\//,
     async (route) => {
@@ -85,7 +85,7 @@ export const test = base.extend<{ pair: Pair }>({
         })
 
         contexts.push(context)
-        await localMap(context)
+        await mockMapDownloads(context)
 
         const page = await context.newPage()
 

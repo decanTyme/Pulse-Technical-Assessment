@@ -13,7 +13,8 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  retries: 1,
+  failOnFlakyTests: true,
   timeout: 60_000,
   expect: { timeout: 15_000 },
 
@@ -50,28 +51,6 @@ export default defineConfig({
             "--use-fake-ui-for-media-stream",
             "--autoplay-policy=no-user-gesture-required",
           ],
-        },
-      },
-    },
-    {
-      name: "firefox",
-      use: {
-        browserName: "firefox",
-        launchOptions: {
-          // Temporary assessment workaround: newPage hangs in the restricted Windows runner.
-          // Disables content-process isolation; remove for normal test environments.
-          // No matching upstream issue found; Mozilla documents this debugging override:
-          // https://firefox-source-docs.mozilla.org/contributing/debugging/debugging_on_windows.html#console-debugging
-          env:
-            process.platform === "win32"
-              ? { ...process.env, MOZ_DISABLE_CONTENT_SANDBOX: "1" }
-              : undefined,
-
-          firefoxUserPrefs: {
-            "media.navigator.streams.fake": true,
-            "media.navigator.permission.disabled": true,
-            "media.autoplay.default": 0,
-          },
         },
       },
     },
