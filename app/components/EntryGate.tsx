@@ -2,11 +2,11 @@
 
 import { useState } from "react"
 
-export default function EntryGate({
-  onReady,
-}: {
-  onReady: (lat: number, lng: number) => void
-}) {
+interface EntryGateProps {
+  onReady: (lat: number, lng: number) => Promise<void>
+}
+
+export default function EntryGate({ onReady }: EntryGateProps) {
   const [status, setStatus] = useState<"idle" | "locating" | "error">("idle")
   const [error, setError] = useState<string>("")
 
@@ -16,9 +16,17 @@ export default function EntryGate({
       setError("Your browser doesn't support location access.")
       return
     }
+
     setStatus("locating")
     navigator.geolocation.getCurrentPosition(
-      (pos) => onReady(pos.coords.latitude, pos.coords.longitude),
+      async (pos) => {
+        try {
+          await onReady(pos.coords.latitude, pos.coords.longitude)
+        } catch {
+          setStatus("error")
+          setError("Couldn't enter Pulse. Please try again.")
+        }
+      },
       (err) => {
         setStatus("error")
         setError(

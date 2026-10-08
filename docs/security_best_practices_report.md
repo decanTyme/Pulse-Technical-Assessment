@@ -1,24 +1,24 @@
-# Initial security review
+# Security review
 
-Reviewed 2026-10-08 at commit `b7c7fb6`. This is the initial triage; the proposed fixes have not been implemented.
+The initial review was conducted on 2026-10-08 against commit `b7c7fb6`. Session ownership (001) is implemented and verified. Findings 002–010 remain open, with baseline and hardening priorities listed below. Original findings are retained alongside their resolutions and verification results.
 
-The highest priorities are session ownership, server-side connection authorization, and cancellation of pending camera/microphone acquisition. Anonymous use needs a private way to prove session ownership, separate from the dot IDs shared on the map. Existing input validation and transactions do not establish that ownership or connection consent.
+The review identified session ownership, connection authorization, and camera/microphone cancellation as the highest-impact risks. The ownership fix separates private credentials from public dot IDs. The remaining baseline priorities are server-enforced connection consent, media cancellation, bounded API inputs and abuse controls, and accurate privacy wording.
 
 ## Scope and evidence
 
-- Reviewed all four API routes, request parsing, Prisma queries/schema, WebRTC/media lifecycle, browser rendering, privacy wording, and repository configuration.
-- Executed the actual route and peer-session code with synthetic requests, an in-memory database double, and controlled media/RTC doubles. These reproduce the application behavior below; they do not establish deployed exploitability, native device behavior, or PostgreSQL concurrency behavior. No live database, real media, or public deployment was probed.
+- Application review covered all four API routes, request parsing, Prisma queries/schema, WebRTC/media lifecycle, browser rendering, privacy wording, and repository configuration.
+- Initial behavioral probes executed the route and peer-session code with synthetic requests, an in-memory database double, and controlled media/RTC doubles. These probes reproduced the findings described below. They did not exercise a live database, physical media devices, or a public deployment, and do not establish native device behavior or PostgreSQL concurrency behavior.
 - `npm audit --json --ignore-scripts` completed with **zero reported vulnerabilities** across the current dependency tree. This is a known-advisory check, not a security guarantee.
 - A targeted scan of 142 historical text blobs reachable through local Git refs found no matches for the selected private-key, secret-token, or non-placeholder database-password patterns. Environment/private-context files are excluded; only `.env.example` appears in the tracked environment-file history. This was not an exhaustive secret-detector scan.
-- The developer reports a fresh full E2E and unit/integration suite passing. Those suites were not rerun for this review. Passing functional journeys do not establish the hostile-input and authorization properties reviewed here.
+- Verification of the ownership fix included the focused Node suite, real API/PostgreSQL checks, Chromium journeys, production build, and TypeScript check. Results are recorded under 001. Public deployment, physical-device behavior, and concurrent database admission remain outside that verification.
 
 ## Triage
 
-Severity describes impact; phase describes the proposed delivery order.
+Severity reflects impact at discovery. The baseline column identifies controls required for deployment readiness; the hardening column records subsequent work.
 
 | ID  | Severity | Finding                                                     | Deploy-ready baseline                                        | Later hardening                                      |
 | --- | -------- | ----------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
-| 001 | High     | Public IDs authorize private session operations             | Add per-session ownership checks                             | Review expiration/replay behavior                    |
+| 001 | High     | Public IDs authorized private session operations            | Completed: per-session ownership checks                      | Review expiration/replay behavior                    |
 | 002 | High     | Signals can change unrelated connections without consent    | Enforce server-owned request/pair state and atomic admission | Broaden concurrency and delayed-write testing        |
 | 003 | High     | Late media acquisition survives stop/disconnect             | Cancel acquisition logically and stop late tracks            | Native-device timing checks                          |
 | 004 | Medium   | Request and signaling validation is incomplete              | Bound bodies/IDs and validate payloads by signal type        | Extend malformed-input coverage as needed            |
@@ -31,35 +31,41 @@ Severity describes impact; phase describes the proposed delivery order.
 
 ## High severity
 
-### 001: Public session IDs are treated as proof of ownership
+### 001: Public session IDs authorized private operations — resolved
 
-**Rule:** `NEXT-AUTH-001` / object-level authorization. **Evidence:** confirmed route behavior with a database double.
+**Rule:** `NEXT-AUTH-001` / object-level authorization. **Evidence:** original behavior reproduced with a database double; resolution verified against the real API/PostgreSQL stack.
 
-[Polling](../app/api/poll/route.ts#L14) accepts the query-string ID, returns public peer IDs, then reads and deletes the mailbox selected by `where: { toId: id }`. [Leave](../app/api/leave/route.ts#L25) deletes records using the submitted ID. [Join](../app/api/join/route.ts#L49) upserts that ID; [signal](../app/api/signal/route.ts#L60) trusts the submitted `fromId`.
+**Original behavior:** polling used the query-string ID to select and drain a mailbox, while also returning other participants' public IDs. Leave deleted records using the submitted ID, join upserted that ID, and signaling trusted the submitted `fromId`.
 
-**Impact:** someone who learns a public dot ID can impersonate that session, read/consume its signaling, or remove its presence. The probes reproduced unauthorized mailbox consumption and deletion. Interception of actual chat/video was not attempted.
+**Impact:** knowledge of a public dot ID allowed session impersonation, mailbox consumption, and presence deletion. The initial probes reproduced unauthorized mailbox consumption and deletion; interception of actual chat/video was not attempted.
 
-**Baseline fix:** issue a private, unguessable per-session credential separately from the public dot ID. Verify ownership for join/update, poll, leave, and signaling; derive the acting session from verified credentials. Keep credentials out of map responses, URLs, logs, and persistent browser storage. Preserve fresh per-tab sessions and beacon-compatible departure. Random public UUIDs alone do not address this issue. This matches [OWASP's object-authorization guidance](https://api-security.owasp.org/editions/2023/en/0xa1-broken-object-level-authorization/).
+**Resolution:** [join](../app/api/join/route.ts#L43) creates a server-issued public UUID and an independent 256-bit random token. Supplied IDs cannot reclaim or overwrite an existing presence. [Ownership verification](../lib/session.ts#L31) checks the token against its stored SHA-256 hash using constant-time comparison before [polling](../app/api/poll/route.ts#L21), [signaling](../app/api/signal/route.ts#L62), or [departure](../app/api/leave/route.ts#L32) accesses that session's data. This applies [OWASP's object-authorization guidance](https://api-security.owasp.org/editions/2023/en/0xa1-broken-object-level-authorization/) to anonymous sessions.
+
+The client keeps the token in page memory and sends it in authorization headers or the departure beacon body. Credentials are excluded from public peer responses, URLs, logs, and persistent browser storage. Join and mailbox responses use `Cache-Control: no-store`. The additive schema change preserves existing rows; legacy sessions with null hashes cannot authenticate and must re-enter.
+
+**Verification:** unauthorized polling returns HTTP 401 without changing presence or the mailbox. A real API/PostgreSQL regression rejects another participant's token for polling, spoofed signaling, and departure, then confirms that the queued signal remains available to its owner and peer responses expose only public fields. The recorded run passed all **36 Node checks** and **19 Chromium checks**, with every Chromium check passing on its first attempt. The production build and TypeScript check succeeded. Development and test database comparisons identified only the nullable hash-column addition, applied without resets or data-loss flags.
+
+**Remaining considerations:** HTTPS protects credential transport outside local development. Possession of the token permits acting as that session while its presence record exists; deleting presence removes the verifier. Connection and pair authorization remains open under 002, and deployment readiness depends on the remaining baseline controls and configuration checks.
 
 ### 002: Connection consent and reservation ownership are not enforced by the server
 
 **Rule:** `NEXT-AUTH-001` / connection authorization. **Evidence:** confirmed sequential route behavior; concurrent database admission remains untested.
 
-[Signaling](../app/api/signal/route.ts#L61) checks the target's existence/busy flag only for `request`. The `accept`/`end` branch updates both submitted IDs and saves the signal in a transaction, without checking a pending request, current partner, or connection attempt.
+[Signaling](../app/api/signal/route.ts#L67) checks the target's existence/busy flag only for `request`. The `accept`/`end` branch updates both submitted IDs and saves the signal in a transaction, without checking a pending request, current partner, or connection attempt.
 
 **Impact:** an `accept` without a preceding request reserves both participants. A registered third participant's `end` clears another participant's busy flag even when that participant belongs to a different conversation. Both were reproduced. Making those writes atomic does not authorize them.
 
-**Baseline fix:** enforce valid request/accept/active-pair transitions in server-owned state. Accept only a matching pending request, verify both participants are available when claiming the connection, and permit negotiation/end only for the relevant pair/attempt. Cleanup must release that reservation without changing an unrelated or newer connection. Use conditional transactional admission; add a real-database concurrency check when implementing it. Session ownership in 001 is necessary but does not replace these checks. Until both are addressed, restrict public exposure.
+**Baseline requirement:** server-owned state must enforce valid request, acceptance, and active-pair transitions. Acceptance requires a matching pending request and atomic confirmation that both participants are available. Negotiation, ending, and cleanup must be limited to the relevant pair and attempt, preserving unrelated or newer reservations. Verification must include a real-database concurrency check. The ownership control in 001 authenticates the actor; connection consent and reservation ownership require these additional checks before unrestricted public exposure.
 
 ### 003: Camera/microphone acquisition can complete after consent has been withdrawn
 
 **Rule:** application media-consent/lifecycle boundary. **Evidence:** confirmed with synthetic media and RTC doubles.
 
-[`startVideo`](../lib/webrtc.ts#L199) assigns the result of `getUserMedia` and attaches its tracks after the await. [`stopVideo`](../lib/webrtc.ts#L212) stops only an already-assigned stream; [`close`](../lib/webrtc.ts#L259) does not invalidate pending acquisition. The [page callbacks](../app/page.tsx#L195) can also set video active after an old acquisition completes.
+[`startVideo`](../lib/webrtc.ts#L199) assigns the result of `getUserMedia` and attaches its tracks after the await. [`stopVideo`](../lib/webrtc.ts#L212) stops only an already-assigned stream; [`close`](../lib/webrtc.ts#L259) does not invalidate pending acquisition. The [page callbacks](../app/page.tsx#L192) can also set video active after an old acquisition completes.
 
 **Impact:** stopping video while acquisition is pending can still attach the returned tracks to the live peer. Closing the peer first causes track attachment to fail, but the acquired tracks remain unstopped. The probes establish those lifecycle errors; no camera or microphone was opened during the review.
 
-**Baseline fix:** invalidate pending acquisition on stop/close and immediately stop tracks returned for a cancelled acquisition. Share one pending acquisition per attempt, and guard page success/failure callbacks against a changed peer or video attempt. Add focused delayed-acquisition regressions before changing the code.
+**Baseline requirement:** stopping or closing must invalidate pending media acquisition and stop any tracks returned for a cancelled attempt. Each attempt should share one pending acquisition, with success and failure callbacks guarded against a changed peer or video attempt. Delayed-acquisition regression tests should verify these lifecycle boundaries.
 
 ## Medium severity
 
@@ -67,21 +73,21 @@ Severity describes impact; phase describes the proposed delivery order.
 
 **Rule:** `NEXT-INPUT-001` / `NEXT-DOS-001`. **Evidence:** confirmed route behavior; hosting-layer limits were not exercised.
 
-The [JSON reader](../lib/request.ts#L7) fully parses the body before validation. [Signal IDs](../app/api/signal/route.ts#L14) accept any string, unlike join's bounded ID rule. The payload's 64 KiB limit counts UTF-16 code units after parsing; it does not bound the complete request in bytes or validate the enclosed SDP/ICE JSON. Leave/poll also use different ID rules.
+The [JSON reader](../lib/request.ts#L8) fully parses the body before validation. [Signal ID schemas](../app/api/signal/route.ts#L15) accept any string. The original join route used a separate bounded ID rule; the ownership fix instead generates IDs on the server. Polling, signaling, and departure still lack a shared bounded ID schema. The payload's 64 KiB limit counts UTF-16 code units after parsing, without bounding the complete request in bytes or validating the enclosed SDP/ICE JSON.
 
-**Impact:** empty IDs and malformed signaling payloads are stored. A body over 512 KiB containing an ignored extra field was parsed and accepted by the actual handler. Large/invalid input can waste parser/database/browser work; no resource-exhaustion attack was run.
+**Impact:** the initial probes stored empty IDs and malformed signaling payloads. A body over 512 KiB containing an ignored extra field was also parsed and accepted by the handler. Ownership checks restrict the acting ID, but recipient IDs, payload structure, and total body size still require validation. Large or invalid input can waste parser, database, and browser work; no resource-exhaustion attack was run.
 
-**Baseline fix:** apply a small byte limit before parsing, consistent bounded ID validation, and signal-specific payload schemas. Reject invalid/self-targeted operations and absent participants as appropriate to 002. Preserve the `sendBeacon` text-body path. Unknown fields must be covered by the total-body limit even if the schema strips them.
+**Baseline requirement:** request parsing needs a small byte limit, consistent bounded ID validation, and signal-specific payload schemas. Invalid or self-targeted operations and absent participants require rejection consistent with 002. Limits must support the `sendBeacon` text-body path and cover unknown fields even when the schema strips them.
 
 ### 005: Coordination endpoints expose unbounded work and storage
 
 **Rule:** `NEXT-DOS-001`. **Evidence:** static application finding; deployed edge controls are unknown.
 
-Join can create arbitrarily many sessions; signal writes have no per-actor or queue budget. [Polling](../app/api/poll/route.ts#L31) performs global cleanup and unbounded peer/mailbox reads. Individual database timeouts do not limit the number of calls or rows.
+Join can create arbitrarily many sessions; signal writes have no per-actor or queue budget. [Polling](../app/api/poll/route.ts#L37) performs global cleanup and unbounded peer/mailbox reads. Individual database timeouts do not limit the number of calls or rows.
 
 **Impact:** repeated requests can consume database, function, and client resources. A per-payload size cap alone cannot bound aggregate traffic or queue growth. This is the resource-control boundary described by [OWASP API4](https://api-security.owasp.org/editions/2023/en/0xa4-unrestricted-resource-consumption/).
 
-**Baseline fix:** choose practical join/signaling/poll limits and bound queued signals and poll batches, preserving legitimate polling/ICE bursts. Verify shared database or deployment-edge enforcement; process-local counters alone do not cover multiple serverless instances. Check existing hosting controls before introducing infrastructure. Broader load testing is hardening work, not a prerequisite to choosing those basic limits.
+**Baseline requirement:** join, signaling, and polling need practical request budgets, bounded signal queues, and bounded poll batches that accommodate normal polling and ICE bursts. Enforcement must cover multiple serverless instances through shared database or deployment-edge controls. Existing hosting controls need inspection before additional infrastructure is selected. Broader load testing belongs to hardening after the initial budgets are established.
 
 ### 006: Privacy wording promises more than the implementation guarantees
 
@@ -89,17 +95,17 @@ Join can create arbitrarily many sessions; signal writes have no per-actor or qu
 
 [EntryGate](../app/components/EntryGate.tsx#L59) says nothing is stored and closing the tab ends everything. The [schema](../prisma/schema.prisma#L14) stores offset coordinates and signaling payloads. Cleanup runs on leave or poll; stale-time constants are eligibility thresholds, not an independent deletion timer. When all visitors stop polling and departure is lost, rows remain until another cleanup call. Raw location also reaches join before offsetting; chat/video content has no server-side storage path in the reviewed code. WebRTC signaling may contain network addresses, as described in the [W3C security/privacy considerations](https://www.w3.org/TR/webrtc/#security-and-privacy-considerations).
 
-**Baseline fix:** accurately distinguish peer-to-peer chat/video from transient server coordination, disclose the limits of location offsetting and peer network exposure, and describe departure as best-effort cleanup with stale-session removal. **Hardening:** add bounded physical cleanup independent of visitors and verify provider/log/backup retention before making stronger deletion promises. Existing external cleanup could alter the retention assessment; none is configured in this repository.
+**Baseline requirement:** privacy wording must distinguish peer-to-peer chat/video from transient server coordination, disclose location-offset and peer-network limitations, and describe departure as best-effort cleanup with stale-session removal. **Hardening:** physical cleanup needs a bounded schedule independent of visitors, supported by verification of provider, log, and backup retention. External cleanup could alter the retention assessment; none is configured in this repository.
 
 ### 007: A connected peer can supply unbounded data to the browser
 
 **Rule:** runtime input/resource bounds at the peer boundary. **Evidence:** static finding; no browser stress test was performed.
 
-The [data-channel handler](../lib/webrtc.ts#L98) accepts chat strings without length/rate limits and casts control strings to `PeerControl`. [Message history](../app/page.tsx#L123) and [pending ICE candidates](../lib/webrtc.ts#L136) grow without explicit bounds.
+The [data-channel handler](../lib/webrtc.ts#L98) accepts chat strings without length/rate limits and casts control strings to `PeerControl`. [Message history](../app/page.tsx#L126) and [pending ICE candidates](../lib/webrtc.ts#L136) grow without explicit bounds.
 
 **Impact:** a malicious accepted peer can grow client memory and rendering work. React escapes message text; this finding is resource abuse, not a demonstrated XSS issue.
 
-**Hardening:** validate incoming envelopes/controls, bound chat length and history, and cap candidate queues/message rates. Prioritize sooner if hostile-peer resilience becomes a baseline acceptance requirement.
+**Hardening:** incoming envelopes and controls need validation; chat length, history, candidate queues, and message rates need bounds. This work becomes a baseline priority if hostile-peer resilience is included in the acceptance criteria.
 
 ### 008: Privacy offsetting fails at geographic boundaries
 
@@ -107,7 +113,7 @@ The [data-channel handler](../lib/webrtc.ts#L98) accepts chat strings without le
 
 The [offset function](../lib/geo.ts#L15) approximates degree distances and clamps latitude. Valid input at the north pole with a northward bearing returns the original physical point: the demonstrated distance is zero rather than 1-3 km.
 
-**Hardening:** use a geodesic destination calculation and independently verify output distances near poles and the date line. The current ordinary-location browser checks do not establish this boundary behavior. This can be addressed independently of API ownership and consent.
+**Hardening:** a geodesic destination calculation should preserve the required offset near poles and the date line, with independent distance checks at those boundaries. Existing ordinary-location browser checks do not cover these cases. Geographic correction is independent of API ownership and consent.
 
 ## Low severity / configuration verification
 
@@ -115,9 +121,9 @@ The [offset function](../lib/geo.ts#L15) approximates degree distances and clamp
 
 **Rule:** `NEXT-HEADERS-001` / `NEXT-CSP-001`. **Evidence:** configuration observation; deployed response headers were not checked.
 
-[`next.config.ts`](../next.config.ts#L3) configures a development origin but no header policy. No CSP/framing policy or explicit server `Cache-Control: no-store` is configured for the signaling mailbox. Next's `force-dynamic` routes and the client's no-store polling already reduce caching risk; a cache leak was not demonstrated.
+[`next.config.ts`](../next.config.ts#L5) configures a development origin but no general security-header policy. At the initial review, mailbox responses lacked explicit server-side `Cache-Control: no-store`; the ownership fix adds it to join and polling responses. CSP and framing policies remain unconfigured in the application. Deployed headers were not inspected, and no cache leak was demonstrated.
 
-**Baseline verification:** inspect actual production headers and edge settings. **Hardening:** add appropriate anti-framing, content-type/referrer/permission policies, explicit sensitive-response caching rules, and a CSP compatible with Next and [Mapbox's worker requirements](https://docs.mapbox.com/mapbox-gl-js/guides/security-and-testing/). Missing CSP is not proof of XSS: chat uses escaped React text, and the map's `innerHTML` assignment contains a fixed application-authored string.
+**Baseline verification:** production headers and edge settings require inspection. **Hardening:** header policy should cover framing, content types, referrers, permissions, and sensitive-response caching, with a CSP compatible with Next and [Mapbox's worker requirements](https://docs.mapbox.com/mapbox-gl-js/guides/security-and-testing/). Chat uses escaped React text, and the map's `innerHTML` assignment contains a fixed application-authored string; the absence of CSP does not establish XSS.
 
 ### 010: TLS verification depends on a deprecated SSL-mode alias
 
@@ -125,10 +131,10 @@ The [offset function](../lib/geo.ts#L15) approximates degree distances and clamp
 
 [`.env.example`](../.env.example#L1) uses `sslmode=require`. In the installed `pg-connection-string` 2.13.0, without libpq-compatibility mode, this currently aliases `verify-full`; the inspected local configuration uses that path. The parser warns that future major versions change the alias semantics. This is future compatibility risk, not evidence that current certificate verification is disabled.
 
-**Baseline verification:** confirm production settings retain certificate and hostname verification. **Hardening:** explicitly choose `sslmode=verify-full` and verify connectivity before future driver upgrades; do not silence the warning by disabling verification. See [PostgreSQL's SSL-mode definitions](https://www.postgresql.org/docs/current/libpq-ssl.html).
+**Baseline verification:** production settings must retain certificate and hostname verification. **Hardening:** an explicit `sslmode=verify-full` configuration, with a connectivity check, removes dependence on the changing alias behavior before driver upgrades. See [PostgreSQL's SSL-mode definitions](https://www.postgresql.org/docs/current/libpq-ssl.html).
 
 ## Implementation order and remaining verification
 
-Start with 001, then 002; their actor/pair boundaries are prerequisites for meaningful authorization and per-session abuse controls. Fix 003 as its own media-lifecycle change. Follow with 004/005 and the baseline wording in 006. Keep each fix and its focused regression coverage together for review, then rerun the existing core journeys after the relevant boundaries change.
+The next baseline priority is server-enforced connection consent and pair authorization (002), followed by media cancellation (003), input and abuse limits (004/005), and privacy wording (006). Actor and pair boundaries support the later abuse controls. Each control requires focused regression coverage and verification against the core journeys it affects.
 
-Before declaring deployment readiness, verify production headers/TLS, Mapbox public-token scopes/URL restrictions, and runtime database-role privileges. These account settings were not inspected; their absence is not asserted. A browser-visible Mapbox public token is expected, not a leaked server secret. Also retain the separately documented acceptance-response-loss recovery defect: the green core suite does not exercise its deferred fault-injection case.
+Deployment readiness also requires verification of production headers and TLS, Mapbox public-token scopes and URL restrictions, and runtime database-role privileges. These account settings remain uninspected. A browser-visible Mapbox public token is expected and does not imply a leaked server secret. The separately documented acceptance-response-loss defect remains open; the core suite does not exercise that fault-injection case.

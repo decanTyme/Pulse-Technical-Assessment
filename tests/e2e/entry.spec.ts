@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./fixtures"
 
 test("entry explains the anonymous session and offers an enabled action", async ({
   page,
@@ -80,4 +80,35 @@ test("a location timeout offers a retry rather than entering the globe", async (
   await expect(
     page.getByRole("heading", { name: "Pulse", exact: true }),
   ).toBeVisible()
+})
+
+test("a failed join stays at the gate and a retry enters the globe", async ({
+  pair,
+}) => {
+  const page = pair.alice
+  const pageErrors: string[] = []
+
+  page.on("pageerror", (error) => pageErrors.push(error.message))
+
+  // Fail before a server write; the retry uses the real API and test database.
+  await page.route(
+    "**/api/join",
+    (route) => route.fulfill({ status: 503, body: "Private server detail" }),
+    { times: 1 },
+  )
+  await page.goto("/")
+
+  const enter = page.getByRole("button", { name: "Enter Pulse", exact: true })
+  await enter.click()
+  await expect(
+    page.getByText("Couldn't enter Pulse. Please try again."),
+  ).toBeVisible()
+  await expect(enter).toBeEnabled()
+  await expect(
+    page.getByRole("heading", { name: "Pulse", exact: true }),
+  ).toBeVisible()
+
+  await enter.click()
+  await expect(page.getByTitle("You are here", { exact: true })).toBeVisible()
+  expect(pageErrors).toEqual([])
 })

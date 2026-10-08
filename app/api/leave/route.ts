@@ -1,27 +1,40 @@
 import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { z } from "zod"
+import { readJsonBody } from "@/lib/request"
+import { verifySessionOwner } from "@/lib/session"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// POST /api/leave — body { id }. Removes the presence row and any pending
+const LeaveBodySchema = z.object({
+  id: z.string().min(1),
+  token: z.unknown().optional(),
+})
+
+// POST /api/leave — body { id, token }. Removes the presence row and any pending
 // signals to/from this user. Called via navigator.sendBeacon on tab close, so
 // the body may arrive as text — parse defensively.
 export async function POST(request: NextRequest) {
-  let id: string | undefined
-  try {
-    const text = await request.text()
-    id = text ? (JSON.parse(text)?.id as string | undefined) : undefined
-  } catch {
-    id = undefined
+  const body = await readJsonBody(request)
+  if (!body.success) {
+    return Response.json({ error: "invalid body" }, { status: 400 })
   }
 
-  if (typeof id !== "string" || !id) {
+  const result = LeaveBodySchema.safeParse(body.data)
+  if (!result.success) {
     return Response.json({ error: "invalid id" }, { status: 400 })
   }
 
-  // Independent cleanup deletes — no atomicity needed (and interactive
-  // transactions are unreliable over a PgBouncer pooler).
+  const { id, token } = result.data
+
+  // sendBeacon cannot set Authorization, so departure carries its token in JSON.
+  const isOwner = await verifySessionOwner(id, token)
+  if (!isOwner) {
+    return Response.json({ error: "unauthorized" }, { status: 401 })
+  }
+
+  // Independent cleanup deletes remove only the authenticated session's records.
   await prisma.signal.deleteMany({
     where: { OR: [{ toId: id }, { fromId: id }] },
   })

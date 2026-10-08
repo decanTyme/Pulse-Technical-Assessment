@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { readJsonBody } from "@/lib/request"
 import type { SignalType } from "@/lib/types"
+import { readSessionToken, verifySessionOwner } from "@/lib/session"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -58,6 +59,11 @@ export async function POST(request: NextRequest) {
   const data = result.data
   const { fromId, toId, type: signalType } = data
   try {
+    const isOwner = await verifySessionOwner(fromId, readSessionToken(request))
+    if (!isOwner) {
+      return Response.json({ error: "unauthorized" }, { status: 401 })
+    }
+
     if (signalType === "request") {
       const target = await prisma.presence.findUnique({
         where: { id: toId },

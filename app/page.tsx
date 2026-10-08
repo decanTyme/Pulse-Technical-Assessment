@@ -31,7 +31,7 @@ const REQUEST_TIMEOUT_MS = 30_000
 
 export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate")
-  const [sessionId] = useState(() => crypto.randomUUID())
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [peers, setPeers] = useState<PeerDot[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [notice, setNotice] = useState<string | null>(null)
@@ -74,10 +74,13 @@ export default function Home() {
     shouldSend: () => boolean = () => true,
   ): Promise<void> {
     const operation = outgoingSignals.current.then(async () => {
-      if (shouldSend()) await sendSignal(sessionId, peerId, type, payload)
+      if (sessionId && shouldSend())
+        await sendSignal(sessionId, peerId, type, payload)
     })
+
     // A rejection remains visible to its caller without blocking later cleanup.
     outgoingSignals.current = operation.catch(() => {})
+
     return operation
   }
 
@@ -482,7 +485,8 @@ export default function Home() {
 
   async function handleReady(lat: number, lng: number) {
     setMyLocation({ lat, lng })
-    await join(sessionId, lat, lng)
+    const id = await join(lat, lng)
+    setSessionId(id)
     setPhase("live")
   }
 

@@ -5,6 +5,13 @@ import {
   type Page,
 } from "@playwright/test"
 import { BASE_URL } from "./config"
+import type { SessionCredentials } from "../../lib/session"
+
+interface EnteredParticipant {
+  id: string
+  lat: number
+  lng: number
+}
 
 interface Pair {
   alice: Page
@@ -46,7 +53,9 @@ export async function mockMapDownloads(context: BrowserContext) {
   )
 }
 
-export async function enterParticipant(page: Page) {
+export async function enterParticipant(
+  page: Page,
+): Promise<EnteredParticipant> {
   await page.goto("/")
 
   const joined = page.waitForResponse(
@@ -60,17 +69,17 @@ export async function enterParticipant(page: Page) {
   expect(response.status(), "the real join API succeeds").toBe(200)
   await expect(page.getByTitle("You are here", { exact: true })).toBeVisible()
 
-  return response.request().postDataJSON() as {
-    id: string
-    lat: number
-    lng: number
-  }
+  const { id } = (await response.json()) as SessionCredentials
+  const { lat, lng } = response.request().postDataJSON()
+
+  return { id, lat, lng }
 }
 
 export const test = base.extend<{ pair: Pair }>({
   pair: async ({ browser, request }, runTest) => {
     const contexts: BrowserContext[] = []
-    const sessionIds = new Set<string>()
+    const sessions = new Map<string, SessionCredentials>()
+    const captures: Promise<void>[] = []
 
     try {
       const createParticipant = async (
@@ -89,13 +98,17 @@ export const test = base.extend<{ pair: Pair }>({
 
         const page = await context.newPage()
 
-        page.on("request", (request) => {
+        page.on("response", (response) => {
           if (
-            new URL(request.url()).pathname === "/api/join" &&
-            request.method() === "POST"
+            new URL(response.url()).pathname === "/api/join" &&
+            response.request().method() === "POST" &&
+            response.status() === 200
           ) {
-            const body = request.postDataJSON()
-            if (typeof body?.id === "string") sessionIds.add(body.id)
+            captures.push(
+              response.json().then((body: SessionCredentials) => {
+                sessions.set(body.id, { id: body.id, token: body.token })
+              }),
+            )
           }
         })
 
@@ -138,14 +151,27 @@ export const test = base.extend<{ pair: Pair }>({
           createParticipant({ latitude: 12.4556, longitude: 122.4348 }),
       })
     } finally {
+      // Read join responses before closing contexts so cleanup retains ownership.
+      const captured = await Promise.allSettled(captures)
+
       for (const context of contexts) await context.close()
 
       // Clean only this test's sessions, including partial joins and failed tests.
       // Explicit cleanup is a fallback; tests of tab-close cleanup assert first.
-      for (const id of sessionIds) {
-        const response = await request.post("/api/leave", { data: { id } })
-        expect(response.status(), "test session cleanup succeeds").toBe(200)
+      for (const credentials of sessions.values()) {
+        const response = await request.post("/api/leave", { data: credentials })
+
+        // A successful page-close beacon may already have removed the session.
+        expect(
+          [200, 401],
+          "session is removed or no longer authenticates",
+        ).toContain(response.status())
       }
+
+      expect(
+        captured.every((result) => result.status === "fulfilled"),
+        "joined sessions were captured for cleanup",
+      ).toBe(true)
     }
   },
 })

@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import { loadSource } from "../helpers/source.mts"
 import { database } from "../helpers/database.mts"
+import { createSessionHeaders, loadSessionModule } from "../helpers/session.mts"
 
 type RequestModule = typeof import("../../lib/request.ts")
 type SignalRouteModule = typeof import("../../app/api/signal/route.ts")
@@ -14,12 +15,14 @@ const { readJsonBody } = loadSource<RequestModule>("lib/request.ts")
 
 const signalRequest = (type: SignalType, fromId = "alice", toId = "bob") =>
   ({
+    headers: createSessionHeaders(fromId),
     json: async () => ({ type, fromId, toId }),
   }) as NextRequest
 
 const loadSignalHandler = (prisma: unknown) =>
   loadSource<SignalRouteModule>("app/api/signal/route.ts", {
     "@/lib/prisma": { prisma },
+    "@/lib/session": loadSessionModule(prisma),
     "@/lib/request": { readJsonBody },
     zod: { z },
   }).POST
@@ -27,6 +30,7 @@ const loadSignalHandler = (prisma: unknown) =>
 test("failed acceptance rolls back busy flags and a later acceptance succeeds", async () => {
   const db = database()
   const POST = loadSignalHandler(db.prisma)
+
   db.failNext("accept")
   assert.equal((await POST(signalRequest("accept"))).status, 503)
   assert.equal(
@@ -153,6 +157,7 @@ test("supported signal types normalize absent payloads and ignore extra fields",
   for (const payload of [undefined, null, "", '{"synthetic":true}']) {
     for (const type of types) {
       const response = await POST({
+        headers: createSessionHeaders(),
         json: async () => ({
           fromId: "alice",
           toId: "bob",
@@ -178,6 +183,7 @@ test("payloads at the existing UTF-16 length boundary are preserved", async () =
 
   for (const payload of ["x".repeat(64 * 1024), "😀".repeat(32 * 1024)]) {
     const response = await POST({
+      headers: createSessionHeaders(),
       json: async () => ({
         fromId: "alice",
         toId: "bob",

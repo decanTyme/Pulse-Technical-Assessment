@@ -1,4 +1,6 @@
 import type { Presence, Signal } from "@prisma/client"
+import { createHash } from "node:crypto"
+import { SESSION_TOKENS } from "./session.mts"
 
 interface Where {
   id?: string | { in?: string[]; not?: string }
@@ -20,6 +22,7 @@ export function database() {
   let state: State = {
     presence: ["alice", "bob"].map((id) => ({
       id,
+      tokenHash: createHash("sha256").update(SESSION_TOKENS[id]).digest("hex"),
       lat: 1,
       lng: 2,
       busy: false,
@@ -70,12 +73,24 @@ export function database() {
     })
 
     return {
-      presence: model(
-        () => getState().presence,
-        (rows) => {
-          getState().presence = rows
+      presence: {
+        ...model(
+          () => getState().presence,
+          (rows) => {
+            getState().presence = rows
+          },
+        ),
+        async create({ data }: { data: Presence }) {
+          if (getState().presence.some((row) => row.id === data.id)) {
+            throw new Error("Duplicate session")
+          }
+
+          const row = { ...data }
+          getState().presence.push(row)
+
+          return row
         },
-      ),
+      },
       signal: {
         ...model(
           () => getState().signal,

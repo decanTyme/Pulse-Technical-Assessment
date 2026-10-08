@@ -1,9 +1,12 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import test from "node:test"
 import type { NextRequest } from "next/server"
 import type { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { loadSource } from "../helpers/source.mts"
+import { loadSessionModule } from "../helpers/session.mts"
+import { database } from "../helpers/database.mts"
 
 type RequestModule = typeof import("../../lib/request.ts")
 type JoinRouteModule = typeof import("../../app/api/join/route.ts")
@@ -20,6 +23,7 @@ const loadJoinHandler = (
 ) =>
   loadSource<JoinRouteModule>("app/api/join/route.ts", {
     "@/lib/prisma": { prisma },
+    "@/lib/session": loadSessionModule(prisma),
     "@/lib/geo": { applyPrivacyOffset },
     "@/lib/request": { readJsonBody },
     zod: { z },
@@ -38,20 +42,14 @@ test("malformed join JSON returns a fixed 400 before offset or database access",
   assert.deepEqual(await response.json(), { error: "invalid body" })
 })
 
-test("invalid join IDs and coordinates are rejected before offset or database access", async () => {
+test("invalid join coordinates are rejected before offset or database access", async () => {
   const POST = loadJoinHandler({})
 
-  const valid = { id: "synthetic-session", lat: 14.5, lng: 120.25 }
+  const valid = { lat: 14.5, lng: 120.25 }
   const cases: { body: unknown; error: string }[] = [
     { body: null, error: "invalid body" },
     { body: [], error: "invalid body" },
     { body: "unexpected", error: "invalid body" },
-    { body: { ...valid, id: undefined }, error: "invalid id" },
-    { body: { ...valid, id: 123 }, error: "invalid id" },
-    { body: { ...valid, id: "a".repeat(7) }, error: "invalid id" },
-    { body: { ...valid, id: "a".repeat(65) }, error: "invalid id" },
-    { body: { ...valid, id: "😀".repeat(3) }, error: "invalid id" },
-    { body: { ...valid, id: "😀".repeat(33) }, error: "invalid id" },
     { body: { ...valid, lat: "14.5" }, error: "invalid coordinates" },
     { body: { ...valid, lat: null }, error: "invalid coordinates" },
     { body: { ...valid, lat: undefined }, error: "invalid coordinates" },
@@ -73,14 +71,14 @@ test("invalid join IDs and coordinates are rejected before offset or database ac
 })
 
 test("valid boundary joins persist offset coordinates and omit unused fields", async () => {
-  const writes: Prisma.PresenceUpsertArgs[] = []
+  const writes: Prisma.PresenceCreateArgs[] = []
   const inputs: [number, number][] = []
   const offset = { lat: 12.5, lng: 120.75 }
 
   const POST = loadJoinHandler(
     {
       presence: {
-        upsert: async (args: Prisma.PresenceUpsertArgs) => writes.push(args),
+        create: async (args: Prisma.PresenceCreateArgs) => writes.push(args),
       },
     },
     (lat, lng) => {
@@ -90,10 +88,9 @@ test("valid boundary joins persist offset coordinates and omit unused fields", a
   )
 
   const cases = [
-    { id: "a".repeat(8), lat: -90, lng: -180 },
-    { id: "a".repeat(64), lat: 90, lng: 180 },
-    { id: "😀".repeat(4), lat: 0, lng: 0 },
-    { id: "😀".repeat(32), lat: 14.5, lng: 120.25 },
+    { lat: -90, lng: -180 },
+    { lat: 90, lng: 180 },
+    { lat: 0, lng: 0 },
   ]
 
   for (const body of cases) {
@@ -102,21 +99,62 @@ test("valid boundary joins persist offset coordinates and omit unused fields", a
     } as NextRequest)
 
     assert.equal(response.status, 200)
-    assert.deepEqual(await response.json(), { ok: true })
+
+    const data = await response.json()
+    assert.equal(data.ok, true)
+    assert.equal(response.headers.get("cache-control"), "no-store")
+    assert.match(data.id, /^[a-f0-9-]{36}$/)
+    assert.match(data.token, /^[A-Za-z0-9_-]{43}$/)
     assert.deepEqual(inputs.at(-1), [body.lat, body.lng])
 
     const write = writes.at(-1)
     assert.ok(write)
-    assert.equal(write.where.id, body.id)
-    assert.equal(write.create.id, body.id)
-    assert.equal(write.create.lat, offset.lat)
-    assert.equal(write.create.lng, offset.lng)
-    assert.equal(write.create.busy, false)
-    assert.equal(write.update.lat, offset.lat)
-    assert.equal(write.update.lng, offset.lng)
-    assert.equal(Object.hasOwn(write.create, "unexpected"), false)
-    assert.equal(Object.hasOwn(write.update, "unexpected"), false)
+    assert.equal(write.data.id, data.id)
+    assert.equal(
+      write.data.tokenHash,
+      createHash("sha256").update(data.token).digest("hex"),
+    )
+    assert.equal(Object.hasOwn(write.data, "token"), false)
+    assert.equal(write.data.lat, offset.lat)
+    assert.equal(write.data.lng, offset.lng)
+    assert.equal(write.data.busy, false)
+    assert.equal(Object.hasOwn(write.data, "unexpected"), false)
   }
 
   assert.equal(writes.length, cases.length)
+})
+
+test("joining with another dot's ID creates distinct credentials and cannot overwrite it", async () => {
+  const db = database()
+  const existing = structuredClone(db.state.presence)
+
+  const POST = loadJoinHandler(db.prisma, () => ({ lat: 12.5, lng: 120.75 }))
+
+  const ids = new Set<string>()
+  const tokens = new Set<string>()
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await POST({
+      json: async () => ({ id: "alice", lat: 1, lng: 2 }),
+    } as NextRequest)
+
+    assert.equal(response.status, 200)
+
+    const data = await response.json()
+    assert.notEqual(data.id, "alice")
+
+    ids.add(data.id)
+    tokens.add(data.token)
+    assert.equal(
+      await loadSessionModule(db.prisma).verifySessionOwner(
+        data.id,
+        data.token,
+      ),
+      true,
+    )
+  }
+
+  assert.equal(ids.size, 2)
+  assert.equal(tokens.size, 2)
+  assert.deepEqual(db.state.presence.slice(0, 2), existing)
 })

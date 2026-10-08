@@ -59,8 +59,23 @@ Pending. No visual redesign has been selected or implemented.
 
 ## Phase 3: Make it secure
 
-Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. The proposed security fixes remain pending.
-Input validation is implemented for `/api/join` and `/api/signal`. The broader API security review, risk prioritization, and release fixes remain pending.
+Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. Session ownership is implemented; the other baseline controls remain pending.
+
+### Private session ownership
+
+The first authorization regression reproduced a mailbox being read and consumed using only its public dot ID. I prioritized this because every participant receives other dot IDs during ordinary polling. Unpredictable public UUIDs cannot prove ownership once they are shared.
+
+[Join](app/api/join/route.ts) now creates a fresh public UUID and a separate private token with 256 bits of cryptographic randomness. It ignores submitted IDs rather than overwriting an existing presence. [The ownership helper](lib/session.ts) verifies a token against its SHA-256 hash in PostgreSQL before polling, signaling, or departure can touch that session's data. Peer responses expose neither tokens nor hashes. This follows [OWASP's session-token guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#session-id-entropy).
+
+[The API client](lib/api.ts) keeps the token in page memory to preserve fresh per-tab sessions. Normal requests carry it in the `Authorization` header; the departure beacon carries it in its JSON body because `sendBeacon` cannot set that header. Credentials stay out of URLs and persistent browser storage. HTTPS is required outside local development, and anyone who obtains the token can act as that session until its presence is removed.
+
+I kept entry recovery small: the client reports a fixed error for network, HTTP, JSON parsing, or credential-validation failures, and [the entry screen](app/components/EntryGate.tsx) awaits the join callback, displays a retry message, and re-enables the button. Credentials are installed only after a valid response. The browser regression forces the first join to fail before any server write, then enters the globe through the real API on a deliberate retry; it does not automatically repeat join writes.
+
+The additive schema change stores a nullable hash so existing rows remain intact but cannot authenticate; existing participants must re-enter. Ownership proves which participant is acting. Authorization for a connection's pending request and active pair remains the next security fix.
+
+Verification: **36 Node regression checks passed**, the production build and TypeScript check succeeded, and **all 19 Chromium checks passed on their first attempts**. The new real API/database regression verifies denied mailbox access, impersonation and deletion, then confirms the owner's queued request survives. Existing chat, video, reconnect and tab-close journeys remain green.
+
+Entry-recovery validation: **37 Node checks** and **all five focused Chromium entry/ownership checks passed**, including the new failed-entry/retry regression. The production build, TypeScript, and scoped lint checks passed. The full browser suite was not repeated for this follow-up.
 
 ## Phase 4: Make it better
 

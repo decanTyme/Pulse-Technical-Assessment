@@ -21,7 +21,8 @@ Configure its pooled runtime connection in ignored `.env.test.local`:
 DATABASE_URL="postgresql://TEST_ROLE:TEST_PASSWORD@TEST_HOST/TEST_DATABASE?sslmode=require"
 ```
 
-A schema-only branch inherits the schema. For an empty database, apply the
+A schema-only branch inherits the schema at creation. Keep the test database
+synchronized when the Prisma schema changes. For an empty database, apply the
 existing migrations with `npx prisma migrate deploy`, supplying that test
 database's direct connection as `DATABASE_URL` in the shell.
 
@@ -47,8 +48,11 @@ predictable. One retry is allowed, but a test that passes only on retry still
 fails the run through `failOnFlakyTests`.
 
 The [fixture](fixtures.ts) creates isolated browser contexts for anonymous
-participants, closes them at teardown, and removes only their recorded session
-IDs through the leave API. There is no blanket database reset.
+participants and captures their issued session credentials. At teardown it
+closes the contexts and removes only those sessions through the authenticated
+leave API. A session already removed by
+its departure beacon returns 401 on repeated cleanup. There is no blanket
+database reset.
 
 ## Coverage
 
@@ -57,10 +61,11 @@ Specs follow user behavior on Pulse's single page, derived from
 
 | Spec                                       | Journeys                                                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| [entry.spec.ts](entry.spec.ts)             | Entry screen, denied location, and location timeout.                                                                                  |
+| [entry.spec.ts](entry.spec.ts)             | Entry screen, denied location, location timeout, and failed-entry retry.                                                              |
 | [presence.spec.ts](presence.spec.ts)       | Live dots, clean departure, missed-heartbeat expiry, new sessions/privacy offsets, zoom, and pan.                                     |
 | [connections.spec.ts](connections.spec.ts) | Consent, decline/ignored-request retry, messages in both directions, busy-peer exclusion, End/reconnect, and connected-tab departure. |
 | [video.spec.ts](video.spec.ts)             | Either participant initiates; remote frames/audio, return to chat, decline, and media-permission failure on either side.              |
+| [ownership.spec.ts](ownership.spec.ts)     | Real API/database checks: fresh IDs, denied impersonation/deletion/mailbox access, and preserved owner signaling.                     |
 
 Chat assertions require delivery to the recipient. Video assertions require
 remote media reception and usable chat after ending video.
@@ -69,6 +74,8 @@ remote media reception and usable chat after ending video.
 
 Participants use synthetic locations and fake camera/microphone devices.
 Location errors and media denial are injected at browser API boundaries.
+The entry-retry scenario intercepts only the first join with HTTP 503, before
+any server write; its retry uses the real join API and test database.
 The ignored-request scenario advances only the initiator's browser clock;
 server expiry uses real time.
 
@@ -96,8 +103,8 @@ npx playwright show-report
 
 Failure screenshots, traces, and the HTML report are local and ignored by Git.
 The configuration retains a trace on the first failing attempt; Playwright's
-`--trace` option overrides this for a run. Traces can contain SDP and network
-information, so review them before sharing. The multi-participant contexts are
+`--trace` option overrides this for a run. Traces can contain session credentials,
+SDP and network information, so review them before sharing. The multi-participant contexts are
 closed explicitly by the fixture; headed/debug mode helps inspect their flow.
 
 References: [Next.js Playwright guide](https://nextjs.org/docs/app/guides/testing/playwright),

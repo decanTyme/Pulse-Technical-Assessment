@@ -3,17 +3,13 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { applyPrivacyOffset } from "@/lib/geo"
 import { readJsonBody } from "@/lib/request"
+import { createSessionCredentials, hashSessionToken } from "@/lib/session"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const JoinBodySchema = z.object(
   {
-    id: z.string({ error: "invalid id" }).refine(
-      // Match the existing UTF-16 length rule, including non-BMP characters.
-      (id) => id.length >= 8 && id.length <= 64,
-      { error: "invalid id" },
-    ),
     lat: z
       .number({ error: "invalid coordinates" })
       .min(-90, { error: "invalid coordinates" })
@@ -26,9 +22,8 @@ const JoinBodySchema = z.object(
   { error: "invalid body" },
 )
 
-// POST /api/join — body { id, lat, lng } (raw coords).
-// Applies a 1–3 km privacy offset and upserts the presence row. Raw
-// coordinates are never stored.
+// POST /api/join — body { lat, lng } (raw coords).
+// Always creates a fresh session; a supplied public ID cannot reclaim a dot.
 export async function POST(request: NextRequest) {
   const body = await readJsonBody(request)
   if (!body.success) {
@@ -43,24 +38,23 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { id, lat, lng } = result.data
+  const { lat, lng } = result.data
   const offset = applyPrivacyOffset(lat, lng)
+  const { id, token } = createSessionCredentials()
 
-  await prisma.presence.upsert({
-    where: { id },
-    create: {
+  await prisma.presence.create({
+    data: {
       id,
+      tokenHash: hashSessionToken(token),
       lat: offset.lat,
       lng: offset.lng,
       busy: false,
       lastSeen: new Date(),
     },
-    update: {
-      lat: offset.lat,
-      lng: offset.lng,
-      lastSeen: new Date(),
-    },
   })
 
-  return Response.json({ ok: true })
+  return Response.json(
+    { ok: true, id, token },
+    { headers: { "Cache-Control": "no-store" } },
+  )
 }
