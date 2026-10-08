@@ -7,6 +7,7 @@ type SessionModule = typeof import("../../lib/session.ts")
 export const SESSION_TOKENS: Record<string, string> = {
   alice: "a".repeat(43),
   bob: "b".repeat(43),
+  charlie: "c".repeat(43),
 }
 
 export function createSessionHeaders(id = "alice"): Headers {

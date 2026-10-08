@@ -8,26 +8,27 @@ import ChatPanel, { type ChatMessage } from "./components/ChatPanel"
 import VideoPanel from "./components/VideoPanel"
 import { join, leave, poll, sendSignal } from "@/lib/api"
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc"
-import { POLL_INTERVAL_MS } from "@/lib/presence"
+import { POLL_INTERVAL_MS, REQUEST_TIMEOUT_MS } from "@/lib/presence"
 import { type PeerDot, type SignalMsg, type SignalType } from "@/lib/types"
+
+interface ConnectionAttempt {
+  peerId: string
+  connectionId: string
+}
 
 type Conn =
   | { kind: "idle" }
-  | { kind: "requesting"; peerId: string }
-  | { kind: "incoming"; peerId: string }
-  | { kind: "connecting"; peerId: string }
-  | { kind: "connected"; peerId: string }
+  | (ConnectionAttempt & {
+      kind: "requesting" | "incoming" | "connecting" | "connected"
+    })
 
 type VideoState = "none" | "requesting" | "incoming" | "active"
 
-interface PendingCleanup {
-  peerId: string
+interface PendingCleanup extends ConnectionAttempt {
   peer: PeerSession | null
   operation: Promise<void>
   failed: boolean
 }
-
-const REQUEST_TIMEOUT_MS = 30_000
 
 export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate")
@@ -68,14 +69,20 @@ export default function Home() {
   }
 
   function queueSignal(
-    peerId: string,
+    attempt: ConnectionAttempt,
     type: SignalType,
     payload?: string,
     shouldSend: () => boolean = () => true,
   ): Promise<void> {
     const operation = outgoingSignals.current.then(async () => {
       if (sessionId && shouldSend())
-        await sendSignal(sessionId, peerId, type, payload)
+        await sendSignal(
+          sessionId,
+          attempt.peerId,
+          type,
+          attempt.connectionId,
+          payload,
+        )
     })
 
     // A rejection remains visible to its caller without blocking later cleanup.
@@ -84,20 +91,27 @@ export default function Home() {
     return operation
   }
 
-  function releasePeer(peerId: string, peer: PeerSession | null = null) {
+  function releasePeer(
+    attempt: ConnectionAttempt,
+    peer: PeerSession | null = null,
+  ) {
     const previous = pendingCleanup.current
-    if (previous?.peerId === peerId && !previous.failed) {
+    if (
+      previous?.peerId === attempt.peerId &&
+      previous.connectionId === attempt.connectionId &&
+      !previous.failed
+    ) {
       return previous.operation
     }
 
     const cleanup: PendingCleanup = {
-      peerId,
+      ...attempt,
       peer,
       operation: Promise.resolve(),
       failed: false,
     }
     pendingCleanup.current = cleanup
-    cleanup.operation = queueSignal(peerId, "end")
+    cleanup.operation = queueSignal(attempt, "end")
       .then(() => peer?.endChat())
       .then(() => {
         if (pendingCleanup.current === cleanup) pendingCleanup.current = null
@@ -114,7 +128,7 @@ export default function Home() {
     const cleanup = pendingCleanup.current
     if (!cleanup) return
     // A new user attempt may retry end; never automatically retry request/accept.
-    if (cleanup.failed) await releasePeer(cleanup.peerId, cleanup.peer)
+    if (cleanup.failed) await releasePeer(cleanup, cleanup.peer)
     else await cleanup.operation
   }
 
@@ -148,12 +162,12 @@ export default function Home() {
     return peer
   }
 
-  function startPeer(peerId: string, initiator: boolean) {
+  function startPeer(attempt: ConnectionAttempt, initiator: boolean) {
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
         if (peerRef.current === ps) {
           void queueSignal(
-            peerId,
+            attempt,
             type,
             payload,
             () => peerRef.current === ps,
@@ -182,7 +196,7 @@ export default function Home() {
         }
       },
       onChannelOpen: () => {
-        if (peerRef.current === ps) setConn({ kind: "connected", peerId })
+        if (peerRef.current === ps) setConn({ ...attempt, kind: "connected" })
       },
     })
 
@@ -226,14 +240,20 @@ export default function Home() {
 
   async function requestConnection(peerId: string) {
     if (connRef.current.kind !== "idle") return
-    const attempt: Conn = { kind: "requesting", peerId }
+
+    const attempt: Conn = {
+      kind: "requesting",
+      peerId,
+      connectionId: crypto.randomUUID(),
+    }
+
     setConn(attempt)
     requestTimer.current = setTimeout(() => {
       if (isCurrentAttempt(attempt)) {
         const needsCleanup = writtenRequest.current === attempt
         teardown("No answer.")
         if (needsCleanup) {
-          void releasePeer(peerId).catch(() => {
+          void releasePeer(attempt).catch(() => {
             showNotice("Couldn't finish disconnecting. Please try again.")
           })
         }
@@ -242,17 +262,19 @@ export default function Home() {
 
     try {
       await finishCleanup()
-      await queueSignal(peerId, "request", undefined, () => {
+      await queueSignal(attempt, "request", undefined, () => {
         if (!isCurrentAttempt(attempt)) return false
         writtenRequest.current = attempt
         return true
       })
     } catch {
       if (!isCurrentAttempt(attempt)) return
+
       const needsCleanup = writtenRequest.current === attempt
       teardown("Connection request failed. Please try again.")
+
       if (needsCleanup) {
-        void releasePeer(peerId).catch(() => {
+        void releasePeer(attempt).catch(() => {
           showNotice("Couldn't finish disconnecting. Please try again.")
         })
       }
@@ -264,7 +286,7 @@ export default function Home() {
     const needsCleanup = writtenRequest.current === current
     teardown()
     if (current.kind === "requesting" && needsCleanup) {
-      void releasePeer(current.peerId).catch(() => {
+      void releasePeer(current).catch(() => {
         showNotice("Couldn't finish disconnecting. Please try again.")
       })
     }
@@ -272,17 +294,16 @@ export default function Home() {
 
   async function acceptIncoming() {
     if (connRef.current.kind !== "incoming") return
-    const peerId = connRef.current.peerId
-    const attempt: Conn = { kind: "connecting", peerId }
+    const attempt: Conn = { ...connRef.current, kind: "connecting" }
     let peer: PeerSession | null = null
     setConn(attempt)
     try {
       await finishCleanup()
       if (!isCurrentAttempt(attempt)) return
-      startPeer(peerId, false)
+      startPeer(attempt, false)
       peer = peerRef.current
       await queueSignal(
-        peerId,
+        attempt,
         "accept",
         undefined,
         () => peerRef.current === peer,
@@ -296,7 +317,7 @@ export default function Home() {
 
   function declineIncoming() {
     if (connRef.current.kind !== "incoming") return
-    void queueSignal(connRef.current.peerId, "decline").catch(() => {
+    void queueSignal(connRef.current, "decline").catch(() => {
       showNotice("Couldn't decline the request. Please try again.")
     })
     setConn({ kind: "idle" })
@@ -308,12 +329,12 @@ export default function Home() {
       const peer = teardown(message, false)
       if (peer) {
         // Keep the transport for a normal hangup acknowledgement after cleanup.
-        void releasePeer(c.peerId, peer).catch(() => {
+        void releasePeer(c, peer).catch(() => {
           showNotice("Couldn't finish disconnecting. Please try again.")
         })
       } else {
         // Acceptance was cancelled while waiting for an earlier cleanup.
-        void queueSignal(c.peerId, "decline").catch(() => {})
+        void queueSignal(c, "decline").catch(() => {})
       }
       return
     }
@@ -362,12 +383,26 @@ export default function Home() {
   }
 
   function processSignal(sig: SignalMsg) {
+    const current = connRef.current
+    const matchesCurrentAttempt =
+      current.kind !== "idle" &&
+      current.peerId === sig.fromId &&
+      current.connectionId === sig.connectionId
+    if (sig.type !== "request" && !matchesCurrentAttempt) return
+
     switch (sig.type) {
       case "request": {
         if (connRef.current.kind === "idle") {
-          setConn({ kind: "incoming", peerId: sig.fromId })
-        } else {
-          void queueSignal(sig.fromId, "decline").catch(() => {})
+          setConn({
+            kind: "incoming",
+            peerId: sig.fromId,
+            connectionId: sig.connectionId,
+          })
+        } else if (!matchesCurrentAttempt) {
+          void queueSignal(
+            { peerId: sig.fromId, connectionId: sig.connectionId },
+            "decline",
+          ).catch(() => {})
         }
         break
       }
@@ -377,8 +412,8 @@ export default function Home() {
           if (requestTimer.current) clearTimeout(requestTimer.current)
           requestTimer.current = null
           writtenRequest.current = null
-          startPeer(sig.fromId, true)
-          setConn({ kind: "connecting", peerId: sig.fromId })
+          startPeer(c, true)
+          setConn({ ...c, kind: "connecting" })
         }
         break
       }
@@ -412,6 +447,7 @@ export default function Home() {
         const c = connRef.current
         if (
           (c.kind === "incoming" ||
+            c.kind === "requesting" ||
             c.kind === "connecting" ||
             c.kind === "connected") &&
           c.peerId === sig.fromId

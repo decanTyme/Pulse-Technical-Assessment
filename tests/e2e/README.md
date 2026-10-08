@@ -66,9 +66,17 @@ Specs follow user behavior on Pulse's single page, derived from
 | [connections.spec.ts](connections.spec.ts) | Consent, decline/ignored-request retry, messages in both directions, busy-peer exclusion, End/reconnect, and connected-tab departure. |
 | [video.spec.ts](video.spec.ts)             | Either participant initiates; remote frames/audio, return to chat, decline, and media-permission failure on either side.              |
 | [ownership.spec.ts](ownership.spec.ts)     | Real API/database checks: fresh IDs, denied impersonation/deletion/mailbox access, and preserved owner signaling.                     |
+| [consent.spec.ts](consent.spec.ts)         | Real API/database checks: recipient consent, pair/attempt isolation, competing requests, and duplicate acceptances.                   |
 
 Chat assertions require delivery to the recipient. Video assertions require
 remote media reception and usable chat after ending video.
+
+Ownership and consent specs use authenticated HTTP requests against the same
+production server and isolated database. They assert public responses and owner
+mailboxes rather than inspecting database rows or private page state, and remove
+only the sessions they create. The consent checks issue selected requests
+concurrently within a test; they do not establish every database interleaving or
+load behavior.
 
 ## Fixtures and limits
 

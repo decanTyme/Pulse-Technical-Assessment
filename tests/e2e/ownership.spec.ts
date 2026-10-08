@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import type { SessionCredentials } from "../../lib/session"
+import { randomUUID } from "node:crypto"
 
 test("public dot IDs cannot authorize mailbox access, impersonation or departure", async ({
   request,
@@ -18,12 +19,13 @@ test("public dot IDs cannot authorize mailbox access, impersonation or departure
     }
 
     const [alice, bob] = sessions
+    const connectionId = randomUUID()
     expect(bob.id).not.toBe(alice.id)
     expect(bob.token).not.toBe(alice.token)
 
     const signal = await request.post("/api/signal", {
       headers: { Authorization: `Bearer ${bob.token}` },
-      data: { fromId: bob.id, toId: alice.id, type: "request" },
+      data: { fromId: bob.id, toId: alice.id, type: "request", connectionId },
     })
     expect(signal.status()).toBe(200)
 
@@ -38,7 +40,7 @@ test("public dot IDs cannot authorize mailbox access, impersonation or departure
 
     const impersonation = await request.post("/api/signal", {
       headers: { Authorization: `Bearer ${bob.token}` },
-      data: { fromId: alice.id, toId: bob.id, type: "end" },
+      data: { fromId: alice.id, toId: bob.id, type: "end", connectionId },
     })
     expect(impersonation.status()).toBe(401)
 

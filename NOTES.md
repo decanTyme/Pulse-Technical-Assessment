@@ -35,7 +35,7 @@ The initial failing journeys established a behavioral baseline and gave the agen
 
 I challenged tests tied to private page state and exact operation traces. Page journeys now assert browser-visible outcomes; focused route/API/peer-session regressions use controlled external dependencies where failures can be isolated. Node's built-in runner executes the TypeScript tests without adding another test framework.
 
-As additional failure/race scenarios grew, I deferred them and scoped the automated browser baseline to Chromium after repeated Firefox connection-readiness failures. This reserved time for security and release verification. The open acceptance-recovery defect remains documented below. One retry helps gather evidence, but a test passing only on retry still fails the run.
+As additional failure/race scenarios grew, I deferred them and scoped the automated browser baseline to Chromium after repeated Firefox connection-readiness failures. This reserved time for security and release verification. The acceptance-recovery verification gap remains documented below. One retry helps gather evidence, but a test passing only on retry still fails the run.
 
 Recorded validation: **29 Node regression checks passed**, the production build succeeded, and **all 18 Chromium core journeys passed on their first attempts**. These counts describe the checks actually run. See [focused test boundaries](tests/unit/README.md) and [browser coverage](tests/e2e/README.md).
 
@@ -50,7 +50,7 @@ Local entry completes in under one second and signaling requests in under 100 ms
 ### Remaining limitations
 
 - Automated coverage establishes the Chromium baseline. Synthetic locations/media and intercepted map downloads leave real Mapbox configuration, hardware permissions, cross-browser and cross-network behavior for separate verification.
-- **Open recovery defect:** when the server stores an `accept` signal but its HTTP response fails, cleanup can remove that signal before the requester polls. The requester can remain in the `requesting` state after receiving an `end` signal, blocking a replacement request. Deferring its fault-injection test does not resolve it.
+- **Acceptance-recovery verification:** the previously reproduced lost-acceptance-response case exposed a requester that ignored an `end` signal while still waiting. Matching `end` signals now also reset the `requesting` state. Its deferred fault-injection scenario has not been rerun, so ordinary End/reconnect success does not establish recovery from that response loss.
 - Vercel project setup, environment configuration, deployed function region, and an HTTPS two-participant smoke test remain pending. The local baseline alone does not establish deployment readiness.
 
 ## Phase 2: Make it good
@@ -59,7 +59,7 @@ Pending. No visual redesign has been selected or implemented.
 
 ## Phase 3: Make it secure
 
-Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. Session ownership is implemented; the other baseline controls remain pending.
+Input validation is implemented for `/api/join` and `/api/signal`. I started the security phase with a read-only review before selecting fixes. The [initial security triage](docs/security_best_practices_report.md) prioritizes session ownership, server-side connection consent, and cancellation of pending camera/microphone acquisition for the deploy-ready baseline. Bounded API inputs/abuse controls and accurate privacy wording are also baseline work; the report records remaining hardening and configuration checks separately. The dependency audit reported zero known vulnerabilities. Session ownership and server-side connection consent are implemented; the other baseline controls remain pending.
 
 ### Private session ownership
 
@@ -71,11 +71,25 @@ The first authorization regression reproduced a mailbox being read and consumed 
 
 I kept entry recovery small: the client reports a fixed error for network, HTTP, JSON parsing, or credential-validation failures, and [the entry screen](app/components/EntryGate.tsx) awaits the join callback, displays a retry message, and re-enables the button. Credentials are installed only after a valid response. The browser regression forces the first join to fail before any server write, then enters the globe through the real API on a deliberate retry; it does not automatically repeat join writes.
 
-The additive schema change stores a nullable hash so existing rows remain intact but cannot authenticate; existing participants must re-enter. Ownership proves which participant is acting. Authorization for a connection's pending request and active pair remains the next security fix.
+The additive schema change stores a nullable hash so existing rows remain intact but cannot authenticate; existing participants must re-enter. Ownership proves which participant is acting; the connection checks below separately establish the recipient's consent and the current pair.
 
 Verification: **36 Node regression checks passed**, the production build and TypeScript check succeeded, and **all 19 Chromium checks passed on their first attempts**. The new real API/database regression verifies denied mailbox access, impersonation and deletion, then confirms the owner's queued request survives. Existing chat, video, reconnect and tab-close journeys remain green.
 
 Entry-recovery validation: **37 Node checks** and **all five focused Chromium entry/ownership checks passed**, including the new failed-entry/retry regression. The production build, TypeScript, and scoped lint checks passed. The full browser suite was not repeated for this follow-up.
+
+### Connection consent and attempt cleanup
+
+The first focused regression reproduced an `accept` without a pending request reserving both participants. A valid session token proved the sender's identity but did not authorize that connection. I kept the fix within the existing coordination store: [connection rules](lib/coordination.ts) record each participant's current peer, request initiator, attempt ID, and request time on `Presence`. There is no connection-history table or additional service. One pending interaction per participant matches the existing interface; pending requests expire after 30 seconds.
+
+Only the intended recipient can accept or decline the matching pending request. SDP/ICE signaling requires both participants to belong to that accepted pair. A fresh UUID from [the page](app/page.tsx) identifies each attempt and travels with its signals; it is a correlation ID, while the private token still authorizes the acting session. Old or unrelated controls cannot release a different attempt. The browser also ignores controls that do not match its current peer and attempt.
+
+Admission, acceptance, cleanup, and their mailbox messages use one serializable database transaction per transition. Competing changes can produce a write conflict; the helper retries only Prisma's `P2034` rollback error, with at most three attempts. It does not automatically replay a write after a transport failure with an uncertain commit outcome. This follows [Prisma's concurrency guidance](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions#transaction-timing-issues) and [OWASP's server-side workflow guidance](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html#preventing-out-of-order-api-execution).
+
+Leaving or stale-session removal releases the matching partner and notifies it in the same transaction. Expiry notifies both participants. Repeated `end` calls for an absent or older attempt are harmless successful no-ops, supporting cleanup after a lost acknowledgement without clearing a replacement reservation. Matching `end` signals also return a waiting requester to idle. Heartbeats and public map reads remain outside these serializable transitions.
+
+The [migration](prisma/migrations/20261008010000_connection_consent/migration.sql) adds five nullable columns and two indexes, preserving existing rows. Development and isolated test schemas were synchronized without resets or data-loss flags. Existing participants should re-enter; legacy signals without an attempt ID are drained without delivery.
+
+Verification: **all 41 Node checks passed**, and **all 22 Chromium checks passed on their first attempts** against the production build. The latter includes 19 browser journeys and three real API/PostgreSQL checks. [Consent regressions](tests/e2e/consent.spec.ts) exercise competing requests, duplicate acceptances, third-participant controls, and obsolete attempts through HTTP. These verify selected concurrency scenarios, not every interleaving or a load guarantee. TypeScript and scoped source lint checks passed. Broader delayed-response recovery remains deferred.
 
 ## Phase 4: Make it better
 

@@ -17,12 +17,16 @@ export interface PeerDot {
   busy: boolean
 }
 
-export interface SignalMsg {
-  id: string
+export interface SignalData {
   fromId: string
   toId: string
+  connectionId: string
   type: SignalType
   payload: string | null
+}
+
+export interface SignalMsg extends SignalData {
+  id: string
   createdAt: string
 }
 

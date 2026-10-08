@@ -12,24 +12,31 @@ datasource db {
 }
 
 model Presence {
-  id        String   @id // server-generated public session UUID
-  tokenHash String? // SHA-256 of the private session token; legacy rows cannot authenticate
-  lat       Float // ALREADY privacy-offset coords (raw is never stored)
-  lng       Float
-  busy      Boolean  @default(false) // true while in an active connection
-  lastSeen  DateTime
+  id           String    @id // server-generated public session UUID
+  tokenHash    String? // SHA-256 of the private session token; legacy rows cannot authenticate
+  lat          Float // ALREADY privacy-offset coords (raw is never stored)
+  lng          Float
+  busy         Boolean   @default(false) // true while in an active connection
+  lastSeen     DateTime
+  connectionId String? // current attempt only; identifies its signals, not its owner
+  peerId       String?
+  initiatorId  String?
+  requestedAt  DateTime?
 
   @@index([lastSeen])
+  @@index([peerId])
+  @@index([requestedAt])
 }
 
 model Signal {
   // Mailbox for connection requests + WebRTC signaling only.
-  id        String   @id @default(uuid())
-  toId      String // recipient session id
-  fromId    String // sender session id
-  type      String // request | accept | decline | offer | answer | ice | end
-  payload   String? // JSON string (SDP / ICE candidate)
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  toId         String // recipient session id
+  fromId       String // sender session id
+  type         String // request | accept | decline | offer | answer | ice | end
+  payload      String? // JSON string (SDP / ICE candidate)
+  connectionId String? // legacy messages without an attempt are not delivered
+  createdAt    DateTime @default(now())
 
   @@index([toId])
 }

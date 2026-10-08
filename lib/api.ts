@@ -63,6 +63,7 @@ export async function sendSignal(
   fromId: string,
   toId: string,
   type: SignalType,
+  connectionId: string,
   payload?: string,
 ): Promise<void> {
   const token = getSessionToken(fromId)
@@ -76,7 +77,7 @@ export async function sendSignal(
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ fromId, toId, type, payload }),
+      body: JSON.stringify({ fromId, toId, type, connectionId, payload }),
       signal: controller.signal,
     })
 

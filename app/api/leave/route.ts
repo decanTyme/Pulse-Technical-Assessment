@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { readJsonBody } from "@/lib/request"
 import { verifySessionOwner } from "@/lib/session"
+import { removeSessions, runCoordinationTransaction } from "@/lib/coordination"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,11 +34,8 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  // Independent cleanup deletes remove only the authenticated session's records.
-  await prisma.signal.deleteMany({
-    where: { OR: [{ toId: id }, { fromId: id }] },
-  })
-  await prisma.presence.deleteMany({ where: { id } })
+  // Releasing the matching peer and removing the owner succeed or roll back together.
+  await runCoordinationTransaction((tx) => removeSessions(tx, { id }))
 
   return Response.json({ ok: true })
 }

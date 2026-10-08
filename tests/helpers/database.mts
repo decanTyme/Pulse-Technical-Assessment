@@ -2,10 +2,22 @@ import type { Presence, Signal } from "@prisma/client"
 import { createHash } from "node:crypto"
 import { SESSION_TOKENS } from "./session.mts"
 
+type ConnectionFields =
+  "connectionId" | "peerId" | "initiatorId" | "requestedAt"
+type CreatedPresence = Omit<Presence, ConnectionFields> &
+  Partial<Pick<Presence, ConnectionFields>>
+type CreatedSignal = Pick<Signal, "fromId" | "toId" | "type"> &
+  Partial<Pick<Signal, "payload" | "connectionId">>
+
 interface Where {
   id?: string | { in?: string[]; not?: string }
-  fromId?: string
-  toId?: string
+  fromId?: string | { in?: string[] }
+  toId?: string | { in?: string[] }
+  connectionId?: string | null | { not: null }
+  peerId?: string | null
+  initiatorId?: string | null
+  busy?: boolean
+  requestedAt?: { lt?: Date; gte?: Date }
   lastSeen?: { lt?: Date; gte?: Date }
   createdAt?: { lt?: Date }
   OR?: Where[]
@@ -16,17 +28,21 @@ interface State {
   signal: Signal[]
 }
 
-export function database() {
+export function database(ids = ["alice", "bob"]) {
   let nextId = 0
   let failType: string | undefined
   let state: State = {
-    presence: ["alice", "bob"].map((id) => ({
+    presence: ids.map((id) => ({
       id,
       tokenHash: createHash("sha256").update(SESSION_TOKENS[id]).digest("hex"),
       lat: 1,
       lng: 2,
       busy: false,
       lastSeen: new Date(),
+      connectionId: null,
+      peerId: null,
+      initiatorId: null,
+      requestedAt: null,
     })),
     signal: [],
   }
@@ -80,12 +96,18 @@ export function database() {
             getState().presence = rows
           },
         ),
-        async create({ data }: { data: Presence }) {
+        async create({ data }: { data: CreatedPresence }) {
           if (getState().presence.some((row) => row.id === data.id)) {
             throw new Error("Duplicate session")
           }
 
-          const row = { ...data }
+          const row = {
+            connectionId: null,
+            peerId: null,
+            initiatorId: null,
+            requestedAt: null,
+            ...data,
+          }
           getState().presence.push(row)
 
           return row
@@ -98,12 +120,7 @@ export function database() {
             getState().signal = rows
           },
         ),
-        async create({
-          data,
-        }: {
-          data: Pick<Signal, "fromId" | "toId" | "type"> &
-            Partial<Pick<Signal, "payload">>
-        }) {
+        async create({ data }: { data: CreatedSignal }) {
           if (data.type === failType) {
             failType = undefined
             throw new Error("Injected transport failure")
@@ -113,6 +130,7 @@ export function database() {
             id: String(nextId++),
             createdAt: new Date(),
             payload: null,
+            connectionId: null,
             ...data,
           }
 

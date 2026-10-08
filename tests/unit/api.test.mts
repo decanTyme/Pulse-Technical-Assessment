@@ -3,6 +3,7 @@ import test from "node:test"
 import { z } from "zod"
 
 import { loadSource, settle } from "../helpers/source.mts"
+import { CONNECTION_ID } from "../helpers/coordination.mts"
 
 type ApiModule = typeof import("../../lib/api.ts")
 type TimeoutCallback = () => void
@@ -51,9 +52,12 @@ test("signaling rejects HTTP failures without exposing the response body", async
   )
 
   await api.join(1, 2)
-  await assert.rejects(api.sendSignal(SESSION_ID, "bob", "request"), {
-    message: "Signal coordination failed.",
-  })
+  await assert.rejects(
+    api.sendSignal(SESSION_ID, "bob", "request", CONNECTION_ID),
+    {
+      message: "Signal coordination failed.",
+    },
+  )
 })
 
 test("signaling waits for a successful HTTP response before completing", async () => {
@@ -74,7 +78,7 @@ test("signaling waits for a successful HTTP response before completing", async (
   )
 
   await api.join(1, 2)
-  const operation = api.sendSignal(SESSION_ID, "bob", "end")
+  const operation = api.sendSignal(SESSION_ID, "bob", "end", CONNECTION_ID)
   void operation.then(
     () => {
       settled = true
@@ -129,7 +133,7 @@ test("signaling aborts a stalled fetch after 15 seconds and clears its timer", a
   )
 
   await api.join(1, 2)
-  const operation = api.sendSignal(SESSION_ID, "bob", "request")
+  const operation = api.sendSignal(SESSION_ID, "bob", "request", CONNECTION_ID)
   expire()
 
   await assert.rejects(operation, { message: "Aborted" })
@@ -163,7 +167,7 @@ test("the client sends private credentials in headers or the departure beacon, n
   assert.equal(await api.join(1, 2), SESSION_ID)
 
   await api.poll(SESSION_ID)
-  await api.sendSignal(SESSION_ID, "bob", "request")
+  await api.sendSignal(SESSION_ID, "bob", "request", CONNECTION_ID)
   api.leave(SESSION_ID)
 
   assert.deepEqual(JSON.parse(calls[0].options.body as string), {

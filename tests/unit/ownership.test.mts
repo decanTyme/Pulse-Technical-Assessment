@@ -3,6 +3,10 @@ import test from "node:test"
 import type { NextRequest } from "next/server"
 import { loadSource } from "../helpers/source.mts"
 import { database } from "../helpers/database.mts"
+import {
+  CONNECTION_ID,
+  loadCoordinationModule,
+} from "../helpers/coordination.mts"
 import { z } from "zod"
 import {
   createSessionHeaders,
@@ -21,6 +25,7 @@ const { readJsonBody } = loadSource<RequestModule>("lib/request.ts")
 function loadOwnedRoutes(db: Database) {
   const dependencies = {
     "@/lib/prisma": { prisma: db.prisma },
+    "@/lib/coordination": loadCoordinationModule(db.prisma),
     "@/lib/session": loadSessionModule(db.prisma),
     "@/lib/request": { readJsonBody },
     "@/lib/presence": { STALE_MS: 15_000, SIGNAL_TTL_MS: 60_000 },
@@ -59,7 +64,12 @@ test("knowing a public session ID cannot read or consume its mailbox", async () 
   const db = database()
 
   await db.prisma.signal.create({
-    data: { fromId: "bob", toId: "alice", type: "request" },
+    data: {
+      fromId: "bob",
+      toId: "alice",
+      type: "request",
+      connectionId: CONNECTION_ID,
+    },
   })
 
   const before = structuredClone(db.state)
@@ -82,7 +92,12 @@ test("the owner can consume its mailbox without exposing any credential", async 
   const db = database()
 
   await db.prisma.signal.create({
-    data: { fromId: "bob", toId: "alice", type: "request" },
+    data: {
+      fromId: "bob",
+      toId: "alice",
+      type: "request",
+      connectionId: CONNECTION_ID,
+    },
   })
 
   const response = await loadOwnedRoutes(db).poll(
@@ -106,7 +121,12 @@ test("another session's token cannot send signals on behalf of a public ID", asy
     for (const headers of [new Headers(), createSessionHeaders("bob")]) {
       const response = await routes.signal({
         headers,
-        json: async () => ({ fromId: "alice", toId: "bob", type }),
+        json: async () => ({
+          fromId: "alice",
+          toId: "bob",
+          type,
+          connectionId: CONNECTION_ID,
+        }),
       } as NextRequest)
       assert.equal(response.status, 401)
       assert.deepEqual(await response.json(), { error: "unauthorized" })
@@ -120,7 +140,12 @@ test("departure requires the departing session's token even for a beacon", async
   const db = database()
 
   await db.prisma.signal.create({
-    data: { fromId: "bob", toId: "alice", type: "request" },
+    data: {
+      fromId: "bob",
+      toId: "alice",
+      type: "request",
+      connectionId: CONNECTION_ID,
+    },
   })
 
   const before = structuredClone(db.state)
