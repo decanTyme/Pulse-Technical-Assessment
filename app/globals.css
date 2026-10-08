@@ -167,6 +167,9 @@
   }
 
   .pulse-shell {
+    --conversation-width: min(400px, calc(100vw - 3rem));
+    --conversation-height: min(70dvh, calc(100dvh - 8rem));
+    --conversation-bottom: max(1rem, env(safe-area-inset-bottom));
     position: fixed;
     inset: 0;
     overflow: hidden;
@@ -187,6 +190,7 @@
     right: 1.5rem;
     left: 1.5rem;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
@@ -204,16 +208,22 @@
     pointer-events: auto;
   }
 
-  .pulse-theme-select {
+  .pulse-theme-toggle {
+    display: grid;
+    width: 2.75rem;
     min-height: 2.75rem;
+    place-items: center;
     border: 0;
     border-radius: var(--radius-control);
-    background: var(--surface);
+    background: transparent;
     color: var(--foreground);
-    padding: 0.625rem 0.75rem;
-    font-family: var(--font-body);
+    padding: 0.625rem;
     cursor: pointer;
-    box-shadow: 0 2px 12px var(--shadow-warm);
+  }
+
+  .pulse-theme-toggle:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--foreground) 10%, transparent);
+    color: var(--action-primary);
   }
 
   .pulse-presence-count {
@@ -281,6 +291,306 @@
     right: 1.5rem;
     bottom: auto;
     left: auto;
+  }
+
+  .pulse-shell[data-conversation="true"] .pulse-header {
+    right: calc(var(--conversation-width) + 3.5rem);
+  }
+
+  .pulse-conversation {
+    position: absolute;
+    z-index: 20;
+    top: max(1.5rem, env(safe-area-inset-top));
+    right: 1.5rem;
+    bottom: 1.5rem;
+    display: flex;
+    width: var(--conversation-width);
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: 0 8px 32px var(--shadow-warm);
+  }
+
+  .pulse-chat {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .pulse-chat-header,
+  .pulse-video-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .pulse-chat-header {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .pulse-chat-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .pulse-chat-actions .pulse-button {
+    padding-inline: 0.75rem;
+  }
+
+  .pulse-messages {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem;
+  }
+
+  .pulse-chat-empty {
+    margin-block: 1.5rem;
+    text-align: center;
+  }
+
+  .pulse-message {
+    display: flex;
+    margin-block: 0.75rem;
+  }
+
+  .pulse-message[data-mine="true"] {
+    justify-content: flex-end;
+  }
+
+  .pulse-message-bubble {
+    max-width: 85%;
+    border-radius: var(--radius-control);
+    background: var(--surface-muted);
+    padding: 0.625rem 0.875rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .pulse-message[data-mine="true"] .pulse-message-bubble {
+    background: var(--action-primary);
+    color: var(--action-primary-text);
+  }
+
+  .pulse-composer {
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border-subtle);
+    padding: 1rem;
+  }
+
+  .pulse-composer-input {
+    min-width: 0;
+    min-height: 2.75rem;
+    flex: 1;
+    border-radius: var(--radius-control);
+    background: var(--surface-muted);
+    padding: 0.625rem 0.75rem;
+    font-size: 1rem;
+  }
+
+  .pulse-composer-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .pulse-video-panel {
+    min-height: 0;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .pulse-video-header {
+    padding-block: 0.5rem;
+  }
+
+  .pulse-video-stage {
+    position: relative;
+    width: 100%;
+    max-height: 25dvh;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: var(--background);
+  }
+
+  .pulse-remote-video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .pulse-video-waiting {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .pulse-local-preview {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: min(25%, 96px);
+    overflow: hidden;
+    border-radius: var(--radius-control);
+    background: var(--surface);
+  }
+
+  .pulse-local-preview video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .pulse-local-preview figcaption {
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .pulse-video-notice {
+    flex-shrink: 0;
+    background: var(--surface-muted);
+    padding: 0.75rem 1rem;
+  }
+
+  .pulse-notice {
+    position: absolute;
+    z-index: 40;
+    top: 6rem;
+    left: 1.5rem;
+    max-width: min(360px, calc(100% - 3rem));
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    padding: 1rem;
+    box-shadow: 0 4px 24px var(--shadow-warm);
+    pointer-events: none;
+  }
+
+  .pulse-request {
+    position: absolute;
+    z-index: 30;
+    bottom: max(1.5rem, env(safe-area-inset-bottom));
+    left: 50%;
+    width: min(360px, calc(100% - 2rem));
+    transform: translateX(-50%);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px var(--shadow-warm);
+  }
+
+  .pulse-prompt {
+    position: fixed;
+    inset: 0;
+    width: min(380px, calc(100% - 2rem));
+    max-height: calc(100dvh - 3rem);
+    margin: auto;
+    overflow-y: auto;
+    border: 0;
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    color: var(--foreground);
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px var(--shadow-warm);
+  }
+
+  .pulse-prompt::backdrop {
+    background: var(--background);
+    opacity: 0.55;
+  }
+
+  .pulse-prompt-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .pulse-prompt-actions .pulse-button {
+    flex: 1;
+  }
+
+  @media (max-width: 768px) {
+    .pulse-header {
+      right: 1rem;
+      left: 1rem;
+      gap: 0.5rem;
+    }
+
+    .pulse-header-controls {
+      gap: 0.5rem;
+    }
+
+    .pulse-presence-count {
+      padding-inline: 0.625rem;
+    }
+
+    .pulse-conversation {
+      top: auto;
+      right: 1rem;
+      bottom: var(--conversation-bottom);
+      left: 1rem;
+      width: auto;
+      height: var(--conversation-height);
+    }
+
+    .pulse-shell[data-video="true"] {
+      --conversation-height: min(80dvh, calc(100dvh - 8rem));
+    }
+
+    .pulse-shell[data-conversation="true"] .pulse-header {
+      right: 1rem;
+    }
+
+    /* Keep attribution visible; map gestures remain available above the panel. */
+    .pulse-shell[data-conversation="true"] .mapboxgl-ctrl-group {
+      display: none;
+    }
+
+    .pulse-prompt {
+      top: auto;
+      bottom: max(1rem, env(safe-area-inset-bottom));
+      margin: 0 auto;
+    }
+  }
+
+  @media (max-height: 600px) {
+    .pulse-video-stage {
+      max-height: 15dvh;
+    }
+  }
+
+  @media (max-height: 450px) {
+    .pulse-chat-header,
+    .pulse-composer,
+    .pulse-messages {
+      padding-block: 0.5rem;
+    }
+
+    .pulse-video-stage {
+      max-height: 10dvh;
+    }
+
+    .pulse-local-preview {
+      right: 0.5rem;
+      bottom: 0.25rem;
+      width: 2.5rem;
+    }
+
+    .pulse-local-preview figcaption {
+      display: none;
+    }
   }
 
   @media (max-width: 640px) {
@@ -385,6 +695,23 @@
 
 .mapboxgl-ctrl-attrib a {
   color: var(--foreground);
+}
+
+.pulse-shell[data-conversation="true"] .mapboxgl-ctrl-bottom-right {
+  right: calc(var(--conversation-width) + 3rem);
+}
+
+@media (max-width: 768px) {
+  .pulse-shell[data-conversation="true"] .mapboxgl-ctrl-bottom-right,
+  .pulse-shell[data-conversation="true"] .mapboxgl-ctrl-bottom-left {
+    bottom: calc(
+      var(--conversation-height) + var(--conversation-bottom) + 0.5rem
+    );
+  }
+
+  .pulse-shell[data-conversation="true"] .mapboxgl-ctrl-bottom-right {
+    right: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

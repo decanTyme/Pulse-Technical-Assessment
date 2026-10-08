@@ -19,7 +19,13 @@ test("declining a request informs the initiator and permits another request", as
   ).toBeVisible()
   await expect(pair.alice.getByRole("textbox")).toHaveCount(0)
   await expect(pair.bob.getByRole("textbox")).toHaveCount(0)
-  await pair.bob.getByRole("button", { name: "Decline", exact: true }).click()
+  await expect(
+    pair.bob.getByRole("dialog", { name: "A stranger wants to connect" }),
+  ).toBeVisible()
+  await expect(
+    pair.bob.getByRole("button", { name: "Decline", exact: true }),
+  ).toBeFocused()
+  await pair.bob.keyboard.press("Escape")
   await expect(
     pair.alice.getByText("Request declined.", { exact: true }),
   ).toBeVisible()

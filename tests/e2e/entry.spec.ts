@@ -52,7 +52,7 @@ test("keyboard entry shows a visible location alert and permits retry", async ({
   await expect(enter).toBeEnabled()
   await page.keyboard.press("Tab")
   await expect(
-    page.getByRole("combobox", { name: "Color theme" }),
+    page.getByRole("button", { name: /^Color theme:/ }),
   ).toBeFocused()
   await page.keyboard.press("Tab")
   await expect(enter).toBeFocused()

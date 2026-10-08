@@ -8,6 +8,15 @@ export interface ChatMessage {
   text: string
 }
 
+interface ChatPanelProps {
+  messages: ChatMessage[]
+  connected: boolean
+  videoBusy: boolean
+  onSend: (text: string) => void
+  onStartVideo: () => void
+  onEnd: () => void
+}
+
 export default function ChatPanel({
   messages,
   connected,
@@ -15,19 +24,18 @@ export default function ChatPanel({
   onSend,
   onStartVideo,
   onEnd,
-}: {
-  messages: ChatMessage[]
-  connected: boolean
-  videoBusy: boolean
-  onSend: (text: string) => void
-  onStartVideo: () => void
-  onEnd: () => void
-}) {
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("")
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" })
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    endRef.current?.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "end",
+    })
   }, [messages])
 
   function submit(e: React.FormEvent) {
@@ -39,75 +47,78 @@ export default function ChatPanel({
   }
 
   return (
-    <div className="absolute inset-y-0 right-0 z-20 flex w-full max-w-md flex-col border-l border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl">
-      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+    <section className="pulse-chat" aria-labelledby="chat-heading">
+      <header className="pulse-chat-header">
         <div>
-          <p className="font-semibold">Stranger</p>
-          <p className="text-xs text-zinc-500">
+          <h2 id="chat-heading" className="type-card-heading">
+            Stranger
+          </h2>
+          <p role="status" className="type-status mt-1 text-muted">
             {connected ? "Connected" : "Connecting…"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="pulse-chat-actions">
           <button
             onClick={onStartVideo}
             disabled={!connected || videoBusy}
-            className="rounded-full border border-zinc-700 px-3 py-1.5 text-sm hover:border-zinc-500 disabled:opacity-40"
+            className="pulse-button pulse-button-secondary"
           >
             Video
           </button>
           <button
             onClick={onEnd}
-            className="rounded-full bg-red-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-400"
+            title="End conversation"
+            className="pulse-button pulse-button-danger"
           >
             End
           </button>
         </div>
       </header>
 
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      <div
+        role="log"
+        aria-label="Conversation messages"
+        className="pulse-messages"
+      >
         {messages.length === 0 && (
-          <p className="mt-8 text-center text-sm text-zinc-500">
-            Say hello. Messages are peer-to-peer and never stored.
+          <p className="pulse-chat-empty type-status text-muted">
+            {connected
+              ? "Start with a hello. Messages travel directly between you and your peer."
+              : "Establishing your connection. Chat will be ready when you're connected."}
           </p>
         )}
-        {messages.map((m) => (
+        {messages.map((message) => (
           <div
-            key={m.id}
-            className={`flex ${m.mine ? "justify-end" : "justify-start"}`}
+            key={message.id}
+            className="pulse-message"
+            data-mine={message.mine}
           >
-            <span
-              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                m.mine
-                  ? "bg-emerald-400 text-zinc-950"
-                  : "bg-zinc-800 text-zinc-100"
-              }`}
-            >
-              {m.text}
+            <span className="sr-only">
+              {message.mine ? "You" : "Stranger"}:{" "}
             </span>
+            <p className="pulse-message-bubble type-chat">{message.text}</p>
           </div>
         ))}
         <div ref={endRef} />
       </div>
 
-      <form
-        onSubmit={submit}
-        className="flex gap-2 border-t border-zinc-800 p-3"
-      >
+      <form onSubmit={submit} className="pulse-composer">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          aria-label="Message"
           placeholder={connected ? "Type a message…" : "Connecting…"}
           disabled={!connected}
-          className="flex-1 rounded-full bg-zinc-900 px-4 py-2 text-sm outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-emerald-400 disabled:opacity-50"
+          className="pulse-composer-input"
         />
         <button
           type="submit"
           disabled={!connected || !draft.trim()}
-          className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-40"
+          className="pulse-button pulse-button-primary"
         >
           Send
         </button>
       </form>
-    </div>
+    </section>
   )
 }

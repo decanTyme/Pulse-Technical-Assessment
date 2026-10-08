@@ -555,37 +555,41 @@ export default function Home() {
   const canDiscover = hasJoined && conn.kind === "idle"
 
   return (
-    <main className="pulse-shell">
+    <main
+      className="pulse-shell"
+      data-conversation={inChat}
+      data-video={video === "active"}
+    >
       <WorldMap
         peers={peers}
         me={myLocation}
         onPeerClick={requestConnection}
         interactive={hasJoined}
         canConnect={canDiscover && presenceStatus === "ready"}
-      />
-
-      <header className="pulse-header">
-        <h1 className="type-wordmark pulse-brand">Pulse</h1>
-        <div className="pulse-header-controls">
-          {hasJoined && (
-            <p role="status" className="pulse-presence-count type-status">
-              {presenceStatus === "ready" ? (
-                <>
-                  <span className="block text-xs font-normal text-muted">
-                    Other people
-                  </span>
-                  <span>{peers.length} online</span>
-                </>
-              ) : presenceStatus === "degraded" ? (
-                "Live updates paused"
-              ) : (
-                "Finding people…"
-              )}
-            </p>
-          )}
-          <ThemeSelector />
-        </div>
-      </header>
+      >
+        <header className="pulse-header">
+          <h1 className="type-wordmark pulse-brand">Pulse</h1>
+          <div className="pulse-header-controls">
+            {hasJoined && (
+              <p role="status" className="pulse-presence-count type-status">
+                {presenceStatus === "ready" ? (
+                  <>
+                    <span className="block text-xs font-normal text-muted">
+                      Other people
+                    </span>
+                    <span>{peers.length} online</span>
+                  </>
+                ) : presenceStatus === "degraded" ? (
+                  "Live updates paused"
+                ) : (
+                  "Finding people…"
+                )}
+              </p>
+            )}
+            <ThemeSelector />
+          </div>
+        </header>
+      </WorldMap>
 
       {!hasJoined && <EntryGate onReady={handleReady} />}
 
@@ -616,26 +620,32 @@ export default function Home() {
       )}
 
       {notice && (
-        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
+        <p role="status" className="pulse-notice type-status">
           {notice}
-        </div>
+        </p>
       )}
 
       {conn.kind === "requesting" && (
-        <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          <span>Requesting connection…</span>
+        <section className="pulse-request" aria-labelledby="request-heading">
+          <h2 id="request-heading" role="status" className="type-card-heading">
+            Waiting for a response…
+          </h2>
+          <p className="type-status mt-3 text-muted">
+            You can cancel while you wait.
+          </p>
           <button
             onClick={cancelRequest}
-            className="rounded-full bg-zinc-700 px-3 py-1 text-xs hover:bg-zinc-600"
+            className="pulse-button pulse-button-secondary mt-4"
           >
             Cancel
           </button>
-        </div>
+        </section>
       )}
 
       {conn.kind === "incoming" && (
         <ConnectionPrompt
           title="A stranger wants to connect"
+          subtitle="Choose whether you'd like to talk."
           acceptLabel="Accept"
           declineLabel="Decline"
           onAccept={acceptIncoming}
@@ -644,43 +654,45 @@ export default function Home() {
       )}
 
       {inChat && (
-        <ChatPanel
-          messages={messages}
-          connected={conn.kind === "connected"}
-          videoBusy={video !== "none"}
-          onSend={(text) => {
-            if (peerRef.current?.sendChat(text)) addMessage(true, text)
-            else {
-              showNotice("Message wasn't sent. The connection is unavailable.")
-            }
-          }}
-          onStartVideo={startVideoRequest}
-          onEnd={endConnection}
-        />
-      )}
-
-      {video === "requesting" && (
-        <div className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-full bg-zinc-800/90 px-4 py-2 text-sm text-zinc-100 shadow-lg backdrop-blur">
-          Waiting for stranger to accept video…
+        <div className="pulse-conversation">
+          {video === "active" && (
+            <VideoPanel
+              localStream={localStream}
+              remoteStream={remoteStream}
+              onEnd={endVideo}
+            />
+          )}
+          {video === "requesting" && (
+            <p role="status" className="pulse-video-notice type-status">
+              Waiting for stranger to accept video…
+            </p>
+          )}
+          <ChatPanel
+            messages={messages}
+            connected={conn.kind === "connected"}
+            videoBusy={video !== "none"}
+            onSend={(text) => {
+              if (peerRef.current?.sendChat(text)) addMessage(true, text)
+              else {
+                showNotice(
+                  "Message wasn't sent. The connection is unavailable.",
+                )
+              }
+            }}
+            onStartVideo={startVideoRequest}
+            onEnd={endConnection}
+          />
         </div>
       )}
 
       {video === "incoming" && (
         <ConnectionPrompt
           title="Start video call?"
-          subtitle="The stranger wants to turn on video."
+          subtitle="Accept to share your camera and microphone. You can return to chat."
           acceptLabel="Accept"
           declineLabel="Decline"
           onAccept={acceptVideo}
           onDecline={declineVideo}
-        />
-      )}
-
-      {video === "active" && (
-        <VideoPanel
-          localStream={localStream}
-          remoteStream={remoteStream}
-          onEnd={endVideo}
         />
       )}
     </main>

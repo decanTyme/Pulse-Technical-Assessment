@@ -4,6 +4,14 @@ import { useSyncExternalStore } from "react"
 
 type ThemePreference = "system" | "light" | "dark"
 
+const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+}
+
+const THEME_LABELS = { system: "System", light: "Light", dark: "Dark" }
+
 function getThemePreference(): ThemePreference {
   const preference = document.documentElement.dataset.themePreference
   return preference === "light" || preference === "dark" ? preference : "system"
@@ -46,30 +54,52 @@ function subscribeToTheme(onChange: () => void) {
   }
 }
 
+function cycleThemePreference() {
+  applyThemePreference(NEXT_THEME[getThemePreference()])
+}
+
 export default function ThemeSelector() {
-  const preference = useSyncExternalStore(
+  const preference = useSyncExternalStore<ThemePreference>(
     subscribeToTheme,
     getThemePreference,
     () => "system",
   )
+  const label = `Color theme: ${THEME_LABELS[preference]}. Switch to ${THEME_LABELS[NEXT_THEME[preference]]}.`
 
   return (
-    <label>
-      <span className="sr-only">Color theme</span>
-      <select
-        className="pulse-theme-select type-status"
-        title="Color theme"
-        value={preference}
-        onChange={(event) => {
-          const value = event.currentTarget.value
-          if (value === "system" || value === "light" || value === "dark")
-            applyThemePreference(value)
-        }}
+    <button
+      type="button"
+      className="pulse-theme-toggle"
+      aria-label={label}
+      title={label}
+      onClick={cycleThemePreference}
+    >
+      <svg
+        aria-hidden="true"
+        focusable="false"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+        {preference === "system" ? (
+          <>
+            <rect x="3" y="4" width="18" height="12" rx="2" />
+            <path d="M12 16v4M8 20h8" />
+          </>
+        ) : preference === "light" ? (
+          <>
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42" />
+          </>
+        ) : (
+          <path d="M20.9 13.35A9 9 0 0 1 10.65 3.1 9 9 0 1 0 20.9 13.35Z" />
+        )}
+      </svg>
+    </button>
   )
 }

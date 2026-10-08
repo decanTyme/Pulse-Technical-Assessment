@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { DM_Sans, Fraunces } from "next/font/google"
 import "./globals.css"
 
@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   title: "Pulse",
   description:
     "A living globe of anonymous strangers. Tap a dot, start talking.",
+}
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 }
 
 export default function RootLayout({

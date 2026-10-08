@@ -73,6 +73,8 @@ Chat assertions require delivery to the recipient. Video assertions require
 remote media reception and usable chat after ending video.
 
 Entry uses Tab/Enter to check keyboard activation and the visible location alert.
+The connection-decline journey checks initial dialog focus and declines with
+Escape, then verifies that another request can be made.
 Theme coverage exercises switching and reload persistence through the actual control.
 Color contrast, font appearance, and responsive layouts are reviewed separately.
 

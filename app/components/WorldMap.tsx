@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import "mapbox-gl/dist/mapbox-gl.css"
 import type { Map as MapboxMap, Marker } from "mapbox-gl"
 import type { MapLocation, PeerDot } from "@/lib/types"
 
 interface WorldMapProps {
+  children?: ReactNode
   peers: PeerDot[]
   me: MapLocation | null
   onPeerClick: (id: string) => void
@@ -46,6 +47,7 @@ function applyMapTheme(map: MapboxMap) {
 }
 
 export default function WorldMap({
+  children,
   peers,
   me,
   onPeerClick,
@@ -85,6 +87,8 @@ export default function WorldMap({
       attributes: true,
       attributeFilter: ["data-theme"],
     })
+    const resizeObserver = new ResizeObserver(() => mapRef.current?.resize())
+    resizeObserver.observe(containerRef.current)
 
     void (async () => {
       try {
@@ -123,6 +127,7 @@ export default function WorldMap({
     return () => {
       cancelled = true
       themeObserver.disconnect()
+      resizeObserver.disconnect()
       markers.forEach((marker) => marker.remove())
       markers.clear()
       meMarkerRef.current?.remove()
@@ -225,6 +230,8 @@ export default function WorldMap({
         inert={!interactive}
         className="pulse-map-canvas h-full w-full"
       />
+
+      {children}
 
       {status === "loading" && (
         <p role="status" className="pulse-map-feedback type-status">

@@ -1,7 +1,16 @@
 "use client"
 
-// Reusable centered prompt for "someone wants to connect" and
-// "someone wants to start video".
+import { useEffect, useId, useRef } from "react"
+
+interface ConnectionPromptProps {
+  title: string
+  subtitle?: string
+  acceptLabel: string
+  declineLabel: string
+  onAccept: () => void
+  onDecline: () => void
+}
+
 export default function ConnectionPrompt({
   title,
   subtitle,
@@ -9,34 +18,51 @@ export default function ConnectionPrompt({
   declineLabel,
   onAccept,
   onDecline,
-}: {
-  title: string
-  subtitle?: string
-  acceptLabel: string
-  declineLabel: string
-  onAccept: () => void
-  onDecline: () => void
-}) {
+}: ConnectionPromptProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
+  const subtitleId = useId()
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
+
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-6">
-      <div className="w-full max-w-xs rounded-2xl bg-zinc-900 p-6 text-center text-zinc-100 shadow-xl">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {subtitle && <p className="mt-1 text-sm text-zinc-400">{subtitle}</p>}
-        <div className="mt-5 flex gap-3">
-          <button
-            onClick={onDecline}
-            className="flex-1 rounded-full border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-500"
-          >
-            {declineLabel}
-          </button>
-          <button
-            onClick={onAccept}
-            className="flex-1 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-300"
-          >
-            {acceptLabel}
-          </button>
-        </div>
+    <dialog
+      ref={dialogRef}
+      className="pulse-prompt"
+      aria-labelledby={titleId}
+      aria-describedby={subtitle ? subtitleId : undefined}
+      onCancel={(event) => {
+        event.preventDefault()
+        onDecline()
+      }}
+    >
+      <h2 id={titleId} className="type-card-heading">
+        {title}
+      </h2>
+      {subtitle && (
+        <p id={subtitleId} className="type-body mt-3 text-muted">
+          {subtitle}
+        </p>
+      )}
+      <div className="pulse-prompt-actions">
+        <button
+          onClick={onDecline}
+          className="pulse-button pulse-button-secondary"
+        >
+          {declineLabel}
+        </button>
+        <button
+          onClick={onAccept}
+          className="pulse-button pulse-button-primary"
+        >
+          {acceptLabel}
+        </button>
       </div>
-    </div>
+    </dialog>
   )
 }
