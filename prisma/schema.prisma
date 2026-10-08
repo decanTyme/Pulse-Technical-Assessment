@@ -17,6 +17,7 @@ model Presence {
   lat          Float // ALREADY privacy-offset coords (raw is never stored)
   lng          Float
   busy         Boolean   @default(false) // true while in an active connection
+  status       String? // Optional ephemeral conversation starter (max 60 chars)
   lastSeen     DateTime
   connectionId String? // current attempt only; identifies its signals, not its owner
   peerId       String?
